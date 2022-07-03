@@ -1,0 +1,290 @@
+
+/*
+The standard bootstrap with this contains 3 main colours
+
+#e95420  红色
+#6bba8b  绿色(有透明)
+#00a064  亮绿色
+#00A651  亮绿色
+#c34113
+#578EC2  浅蓝色
+
+The settings below change the main elements to a custom colour scheme
+*/
+
+
+/* Progress bar colour*/
+.progress-bar {
+  float: left;
+  width: 100%;
+  height: 200%;
+  font-size: 12px;
+  line-height: 20px;
+  color: #ffffff;
+  text-align: center;
+  background-color: #00A064;
+  -webkit-box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  -webkit-transition: width 0.6s ease;
+  -o-transition: width 0.6s ease;
+  transition: width 0.6s ease;
+}
+
+
+/* Main navbar colour*/
+.navbar-default {
+  background-color: #00A064;
+    border-color: #ffffff;
+}
+
+/* Hoover colour for navbar buttons*/
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > li > a:focus {
+  color: #ffffff;
+  background-color: #6bba8b;
+}
+
+/* Navbar active button colour*/
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover,
+.navbar-default .navbar-nav > .active > a:focus {
+  color: #ffffff;
+  background-color: #6bba8b;
+}
+
+
+/* Navbar dropdown menu button colour*/
+.navbar-default .navbar-nav > .open > a,
+.navbar-default .navbar-nav > .open > a:hover,
+.navbar-default .navbar-nav > .open > a:focus {
+  background-color: #6bba8b;
+  color: #ffffff;
+}
+
+/*
+.navbar-default .navbar-toggle {
+  border-color: #00A064;
+}
+.navbar-default .navbar-toggle:hover,
+.navbar-default .navbar-toggle:focus {
+  background-color: #00A064;
+}
+*/
+
+
+/* Colour for elements in dropdown menu*/
+.dropdown-menu > li > a:hover,
+.dropdown-menu > li > a:focus {
+  text-decoration: none;
+  color: #ffffff;
+  background-color: #00A064;
+}
+.dropdown-menu > .active > a,
+.dropdown-menu > .active > a:hover,
+.dropdown-menu > .active > a:focus {
+  color: #ffffff;
+  text-decoration: none;
+  outline: 0;
+  background-color: #00A064;
+}
+
+/* Text col for hyperlinks etc..*/
+a {
+  color: #00A064;
+  text-decoration: none;
+}
+
+/*
+a.text-primary:hover,
+a.text-primary:focus {
+  color: #00A064;
+}
+
+a.bg-primary:hover,
+a.bg-primary:focus {
+  background-color: #00A064;
+}
+ */
+
+/* Text col when hoover over tabs*/
+a:hover,
+a:focus {
+  color: #00A064;
+  text-decoration: underline;
+}
+
+.text-primary {
+  color: #00A064;
+}
+
+.btn-primary {
+  color: #ffffff;
+  background-color: #00A064;
+  border-color: #00A064;
+}
+
+.bg-primary {
+  color: #fff;
+  background-color: #00A064;
+}
+
+
+
+/*light grey = #D6D6D7
+ darker grey = #97989A*/
+
+.btn-default {
+  color: #ffffff;
+  background-color: #6bba8b; /*03a064*/
+  border-color: #6bba8b;
+}
+.btn-default:focus,
+.btn-default.focus {
+  color: #ffffff;
+  background-color: #6bba8b;
+  border-color: #6bba8b; /*# D6D6D7, 6bba8b*/ 
+}
+.btn-default:hover {
+  color: #ffffff;
+  background-color: #6bba8b;
+  border-color: #6bba8b;
+}
+/*
+
+.btn-link:hover,
+.btn-link:focus {
+  color: #ac3911;
+  text-decoration: underline;
+  background-color: transparent;
+}
+*/
+
+
+/*
+.shiny-progress-container {
+  color: #00A064;
+  font-size: 10px;
+  background-color: #00A064;
+  text-align: center;
+}
+
+.shiny-progress .bar{
+  background-color: #00A064;
+  opacity = 0.8;
+}
+
+.shiny-progress .progress{
+  height:6px;
+  color: #00A064;
+}
+
+.shiny-progress .progress-text {
+  position: absolute;
+  right: 10px;
+  height: 24px;
+  width: 240px;
+  color: #FFFFFF;
+  background-color: #00A064;
+  opacity = 0.6;
+  margin: 0px;
+  padding: 2px 3px;
+  opacity: 0.85;
+}
+*/
+
+
+
+/* landing page boxes*/
+.landing-page-box { width:100%; height:100%; min-height:23vh; background-color:white;
+                    border: 1px solid #AAAAAA; margin-bottom: 5px; float: left; 
+                    transition: 0.5s ease; position: relative; object-fit: scale-down;}
+                    
+.landing-page-box-about {width:100%; height:100%; min-height:11vh; background-color:white;
+                          border: 1px solid #AAAAAA; margin-bottom: 5px; float: left; 
+                          position: relative; object-fit: scale-down;}
+                          
+.landing-page-box:hover, .landing-page-box-about:hover {-webkit-transform: scale(1.05); 
+                          -ms-transform: scale(1.05); transform: scale(1.05); } /* hover effect on boxes*/ 
+                          
+/*landing page icons */
+.landing-page-icon {width:100%; /*height:65%; */
+                    min-height:12vh; background-color: white;
+                     border: 0 ; position: absolute; object-fit: scale-down; }
+
+.landing-page-about-icon {width:100%; /*height:65%; */
+                          min-height:6vh; background-color: white;
+                          border: 0; position: absolute; object-fit: scale-down;}
+                          
+/* landing-page titles for boxes， darkblue */ 
+.landing-page-box-title {font-size: 16px; text-align:center; color: black;
+                          font-weight: bold; background-color: none; width:100%; 
+                          max-height: 20px; margin-top: 1.5vh;}
+                          
+/* landing-page description text of boxes*/
+.landing-page-box-description {font-size: 12px; text-align:center; color: black;
+                          background-color: none; width:100%; max-height: 20px; 
+                          margin-top: 2vh; margin-bottom: 1vh; padding-bottom: 3vh;}
+                          
+/*landing page titles for ABOUT boxes */
+.landing-page-box-about-title { font-size: 16px; text-align:center; color: black;
+                                font-weight: bold; background-color: none; 
+                                width:100%; max-height: 20px; margin-top: 5px; }
+                          
+/* landing page buttons*/
+.landing-page-button { position: absolute; top:0; width: 100%; 
+                        height: 100%; opacity: 0;}
+                          
+/*center image - for normal icons */
+img.center {object-fit: scale-down; position:absolute; width:100%; height:100%; 
+              margin-left:auto; margin-right: auto; display: block; padding:20px;}
+                 
+/* center image - for about icons*/
+img.centerabout {object-fit: scale-down; position:absolute; width:100%; 
+                  height:100%; margin-left:auto; margin-right: auto; 
+                  display: block; padding:8px;}
+                 
+/*landing-page column  */
+.landing-page-column {padding-right:3vh}
+               
+/* landing-page icons*/
+.icon-lp{font-size: 1.3em; padding-right: 4px;}
+               
+/* flextable wrapping text
+.tabwid table {white-space: normal;} */
+               
+/*External links underlined an open a new tab */
+.externallink{text-decoration: underline;} 
+
+/* Box layout for the indicator definitions tab */
+.definitionbox {width:100%; height:100%; text-align:left ;background-color:white;
+                  border: 2px solid #2FA4E7; padding: 10px; margin-top: 0; 
+                  margin-bottom: 5px; float: left; transition: 0.5s ease; 
+                  position: relative; object-fit: scale-down;}
+                  
+/* Deprivation boxes text */
+.depr-text-box {width:100%; height:100%; background-color:white;
+    margin-bottom: 20px; box-shadow: 0 2px 5px 0 rgba(0,0,0,.26);
+    transition: 0.5s ease; }             
+.depr-text-box .title{background-color: #4da6ff; color: white;   font-weight:bold;
+    font-size: 20px; display:block; line-height:20px; padding: 5px; padding-left: 20px; }
+.depr-text-box .content{ color: black; overflow: hidden; padding: 10px; min-height: 0px;}
+  
+.down{ background-color:#4da6ff; color: white; background-image:none; 
+       min-width: 23vh;  font-size: 14px; padding: 5px 10px; 
+       margin-top: 5px; margin-left: 3px}
+       
+/*banner图居中显示*/
+.img-responsive, .thumbnail > img, .thumbnail a > img, .carousel-inner > .item > img, .carousel-inner > .item > a > img{
+ width: 80%;
+ height: 300px;
+ display: block;
+ margin:auto;
+}
+ 
+/*table 选中记录后的颜色*/
+.table.dataTable tbody tr.active td {
+  background-color: #49d164;
+  color: black;
+}
+
+

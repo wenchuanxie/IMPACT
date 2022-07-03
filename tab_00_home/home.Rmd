@@ -1,0 +1,16 @@
+---
+title: "Home"
+author: "Yuchen Liao"
+date: "6/28/2022"
+output: html_document
+runtime: shiny
+---
+
+
+<span style="color:black;">**IMPACT**</span> is a web-based platform for the exploration in <span style="color:black;text-decoration: underline">**IM**</span>munotherapeutic <span style="color:black;text-decoration: underline">**P**</span>redictive <span style="color:black;text-decoration: underline">**A**</span>nd <span style="color:black;text-decoration: underline">**C**</span>ancer prognos<span style="color:black;text-decoration: underline">**T**</span>ic biomarkers using genomic, transcriptomic and proteomic data from in-house, literature and public databases including The Cancer Genome Atlas (TCGA),  Clinical Proteomic Tumor Analysis Consortium (CPTAC), (International Cancer Genome Consortium (ICGC) and Gene Expression Omnibus (GEO). 
+
+
+
+
+
+

@@ -1,0 +1,32 @@
+
+# 说明：参考https://github.com/DataScienceScotland/shiny_cookies，从https://www.civicuk.com/assets/scripts/cookie-submit-v8-SCA.js获取
+
+<script src="https://cc.cdn.civiccomputing.com/9/cookieControl-9.x.min.js"></script>
+<script>
+    var config = {
+        apiKey: '42ea541c155f97c6ee424bbdd7a609c658e87a4c',
+        product: 'COMMUNITY',
+        optionalCookies: [
+            {
+                    name: 'analytics',
+                    label: 'Analytics',
+                    description: '',
+                    cookies: [],
+                    onAccept : function(){},
+                    onRevoke: function(){}
+                },{
+                    name: 'preferences',
+                    label: 'Preferences',
+                    description: '',
+                    cookies: [],
+                    onAccept : function(){},
+                    onRevoke: function(){}
+                }
+        ],
+
+        position: 'LEFT',
+        theme: 'LIGHT'
+    };
+    
+    CookieControl.load( config );
+</script>

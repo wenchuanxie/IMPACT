@@ -1,0 +1,27 @@
+---
+title: "About"
+author: "Yuchen Liao"
+date: "6/28/2022"
+output: html_document
+runtime: shiny
+---
+
+## Introduction
+
+Immunotherapies, including antibodies to programmed death receptor 1 (PD-1) or its ligand (PD-L1) and CTL-associated protein 4 (CTLA-4), have wide clinical application for a range of solid tumors, but only a subset of patients can benefit from them. A large number of studies have focused on the identification of predictive biomarkers for immunotherapy. IMPACT is a web-based platform for the exploration in immunotherapeutic predictive and cancer prognostic biomarkers using genomic, transcriptomic and proteomic data from the in-house cohorts, literature and public databases, including TCGA, CPTAC, ICGC, and GEO. IMPACT can be used for survival analysis, meta-analysis, interaction analysis, mutational landscape analysis, immunogenicity analysis, and tumor immune microenvironment analysis. Besides of the routine exploration of biomarkers, four key clinical and scientific questions are specially covered by the above analysis:
+
+1. whether mutations in a gene set (e.g. some pathways), or a single gene, have the potential to be a predictive or prognostic biomarker; 
+2. the meta-analysis of survival analysis across multiple studies;
+3. the potential interaction effects of biomarker-biomarker or biomarker-clinical variables on the association with prognosis;
+4. whether the biomarker is predictive or prognostic in two-arm clinical trials.
+
+
+## Acknowledgements
+We give our special thanks to [Shiny Gallery](https://shiny.rstudio.com/gallery/) for sharing the excellent template. R packages of `surviminer` were adopted to implement IMPACT. We acknowledge their contributions to our work.
+
+
+## Contact us
+
+If you have any questions about the IMPACT, please feel free to contact: **Zhijie Wang** (`jie_969@163.com`) . When describing the issues, please attach the related screenshots and provide the information about the problem as detailed as possible, including the information of the browser you used.
+
+

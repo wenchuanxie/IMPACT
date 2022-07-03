@@ -1,0 +1,1679 @@
+#===============================================================================
+# !/user/bin/env RStudio
+# -*- coding: utf-8 -*-
+# @File    : load_ici_data_db.R
+# @License : Copyright(C), Yucc
+# @Author  : yuchen.liao
+# @Time    : 2022-03-19
+# @IDE     : RStudio
+# @Desc    : 载入ICIs数据到数据库
+#===============================================================================
+
+
+rm(list = ls())
+gc()
+options(stringsAsFactors = F)
+
+library(magrittr)
+library(RMySQL)
+library(openxlsx)
+library(dplyr)
+library(DESeq2)
+
+# 关闭多有sql连接,注释是否会影响别的项目？
+killDbConnections <- function () {
+  all_cons <- dbListConnections(MySQL())
+  print(all_cons)
+  for(con in all_cons)
+    +  dbDisconnect(con)
+  print(paste(length(all_cons), " connections killed."))
+}
+killDbConnections()
+# Quark
+con <- dbConnect(MySQL(),host="127.0.0.1", # 127.0.0.1
+                 dbname="icbcohorts", # icbcohorts
+                 user="icbuser",   # icbuser
+                 password="ICB2021")  # ICB2021
+#获取连接信息，查看database下所有表
+summary(con)  
+# dbGetInfo(con)  
+dbListTables(con)
+# dbRemoveTable(con,"test")
+
+# 同名探针取中位值最大者
+extract.max <- function(raw.rna,col.name){
+  # raw.rna: 第一列为 Symbol，第二列开始为样本名
+  clc.rna <- raw.rna %>%
+    dplyr::rename(Symbol = col.name)
+  # 重复symbol按照中位值排序，取最高者
+  temp.df <- clc.rna[,-1]
+  clc.rna <- clc.rna[!apply(temp.df,1,sum,na.rm =T)==0,]
+  # 去除重复基因名的行，归一化
+  clc.rna$median <- apply(clc.rna[,-1],1,median,na.rm = T)  # 对不包含第一列的数据按行取中位值赋值给新的一列
+  clc.rna <- clc.rna[order(clc.rna$Symbol,clc.rna$median,decreasing = T),]  # 根据基因名和中位值降序排序
+  clc.rna <- clc.rna[!duplicated(clc.rna$Symbol),]  # 删除基因名重复的记录，取一
+  clc.rna <- clc.rna %>%
+    dplyr::select(-median)
+  rownames(clc.rna) <- seq(nrow(clc.rna))
+  return(clc.rna)
+}
+
+# 删除全为0 的行
+func.removeRowsAllZero  <- function(x){
+  del0.df <- x[apply(x, 1, function(y) any(!sum(y) == 0)),]
+  return(del0.df)
+}
+################################################################################
+# 第一次执行时可能报错：
+# could not run statement: Loading local data is disabled; this must be enabled on both the client and server sides
+# 解决方法：
+# terminal登录mysql：mysql -u root -p;
+# 输入密码
+# 输入以下语句检查是否ON状态：SHOW GLOBAL VARIABLES LIKE 'local_infile';
+# 若状态为OFF，则用语句：SET GLOBAL local_infile=1; 更改为ON状态；
+# 重新检查，若为ON则退出重新执行R脚本
+################################################################################
+# 首先录入队列信息统计表
+{
+  raw.stat <- openxlsx::read.xlsx("../../../../../Biodatas/GEO/lung/GEO研究统计.xlsx",sheet = 1,startRow = 1)
+  
+  dbWriteTable(con,"study_info",raw.stat,overwrite = T,row.names = F)
+  
+}
+
+# 免疫治疗队列 ----
+# Hellmann2018 NSCLC 75
+{
+  raw.cli <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Hellmann2018_WES_75/data_clinical_patient.txt")
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Hellmann2018.Rdata")
+  colnames(raw.pts)
+  table(raw.pts$HISTOLOGY)
+  summary(raw.pts$PDL1_EXP)
+  final.cli <- raw.sam %>%
+    dplyr::select(SAMPLE_ID,PATIENT_ID) %>%
+    dplyr::inner_join(raw.pts,by='PATIENT_ID') %>%
+    dplyr::select(sample_id = SAMPLE_ID,
+                  patient_id = PATIENT_ID,
+                  age = AGE_YRS,
+                  sex = SEX,
+                  smoking = SMOKING_STATUS,
+                  hist = HISTOLOGY,
+                  orr = BEST_OVERALL_RESPONSE, 
+                  response = DURABLE_CLINICAL_BENEFIT,
+                  pdl1_exp = PDL1_EXP,
+                  tmb = NONSYNONYMOUS_MUTATION_BURDEN,
+                  neoantigen = PREDICTED_NEOANTIGEN_BURDEN,
+                  pfs_months = PFS_MONTHS,pfs_status = PFS_STATUS) %>%
+    tidyr::separate(pfs_status,into = c('pfs_status','others'),sep = "[:]",remove = T) %>%
+    dplyr::mutate(cancer = 'NSCLC',
+                  cancer_detail = case_when(hist == 'Squamous'~'LUSC',
+                                            hist == 'Non-Squamous'~'LUAD',
+                                            TRUE ~ ''),
+                  smoking = ifelse(smoking %in% c('Former','Current'),'Ever',
+                                   ifelse(smoking %in% c('Never'),'Never','')),
+                  response = ifelse(response == 'No Durable Benefit','NCB',
+                                    ifelse(response == 'Durable Clinical Benefit','DCB','')),
+                  pdl1 = ifelse(pdl1_exp >=50,'Strong',
+                                      ifelse(pdl1_exp < 50 & pdl1_exp >= 1,'Weak',
+                                             ifelse(pdl1_exp < 1,'Negative',NA))),
+                  pfs_status = as.numeric(pfs_status),
+                  treatment = 'PD1pCTLA4',
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,smoking,
+                  cancer,cancer_detail,
+                  tmb,neoantigen,pdl1_exp,pdl1,
+                  pfs_months,pfs_status,
+                  treatment,ici_treatment,orr,response,
+                  seq_type)
+  table(final.cli$cancer_detail)
+  
+  # 临床信息入表
+  dbWriteTable(con,"hellmann_2018_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status" = 'double'))
+  
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  tumor_alt_depth,tumor_depth,tumor_vaf,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  dbWriteTable(con,"hellmann_2018_mutation",final.dna,overwrite = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Samstein2018 Pancancer 1661
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Samstein2018.Rdata")
+  table(raw.sam$CANCER_TYPE)
+  table(raw.sam[which(raw.sam$CANCER_TYPE == 'Bladder Cancer'),]$CANCER_TYPE_DETAILED)  
+  tolower(colnames(raw.sam))
+  final.cli <- raw.sam %>%
+    dplyr::select(sample_id = SAMPLE_ID, 
+                  patient_id = PATIENT_ID,
+                  age = AGE_AT_SEQ_REPORT,
+                  tumor_purity = TUMOR_PURITY,
+                  sample_coverage = SAMPLE_COVERAGE,
+                  cancer = CANCER_TYPE,
+                  cancer_detail = CANCER_TYPE_DETAILED) %>%
+    dplyr::inner_join(dplyr::select(raw.pts,
+                                    patient_id = PATIENT_ID,
+                                    tmb = TMB_SCORE,sex = SEX,
+                                    os_months = OS_MONTHS,
+                                    os_status = OS_STATUS,
+                                    treatment = DRUG_TYPE),by='patient_id') %>%
+    dplyr::select(patient_id,
+                  sample_id,
+                  age,
+                  sex,
+                  tmb,
+                  sample_coverage,
+                  os_months,
+                  os_status,
+                  cancer,
+                  cancer_detail,
+                  treatment ) %>%
+    dplyr::mutate(cancer = ifelse(cancer == 'Non-Small Cell Lung Cancer','NSCLC',
+                                       ifelse(cancer == 'Bladder Cancer','BLCA',
+                                              ifelse(cancer == 'Breast Cancer','BRCA',
+                                                     ifelse(cancer == 'Colorectal Cancer','COAD',
+                                                            ifelse(cancer == 'Esophagogastric Cancer','ESCA',
+                                                                   ifelse(cancer == 'Head and Neck Cancer','HNSC',
+                                                                          ifelse(cancer == 'Renal Cell Carcinoma','KIRC',cancer))))))),
+                  os_status = ifelse(os_status == 'DECEASED',1,0),
+                  ici_treatment = 'Yes',
+                  seq_type = 'NGS') %>%
+    dplyr::mutate(cancer_detail = ifelse(cancer == 'NSCLC',
+                                         ifelse(cancer_detail %in% c('Lung Squamous Cell Carcinoma'),'LUSC','LUAD'),
+                                         cancer)) %>%
+    dplyr::select(patient_id,sample_id,
+                  age,sex,
+                  cancer,cancer_detail,
+                  tmb,sample_coverage,
+                  os_months,os_status,
+                  treatment,ici_treatment,
+                  seq_type)
+  table(final.cli$cancer_detail)
+  # 其他瘤种数目太少，因此不考虑
+  final.cli <- final.cli %>%
+    dplyr::filter(cancer %in% c("BLCA","BRCA","KIRC","COAD",
+                                     "ESCA","Glioma","HNSC",
+                                     "Melanoma","NSCLC"))
+  table(final.cli$cancer_detail)
+  
+  # 临床信息入表
+  dbWriteTable(con,"samstein_2018_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("os_status" = 'double'))
+  sql.upd <- paste0("ALTER TABLE samstein_2018_clinical MODIFY COLUMN os_status DOUBLE NULL;")
+  dbSendStatement(con,sql.upd)
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode) %>%
+    dplyr::select(sample_id, 
+                  hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  
+  dbWriteTable(con,"samstein_2018_mutation",final.dna,overwrite = T,row.names = F)
+  
+  # 分瘤种入表
+  # temp.name <- unique(final.cli$cancer_type)
+  # lapply(temp.name, function(x){
+  #   # x <- temp.name[1]
+  #   temp.ci <- final.cli[which(final.cli$cancer_type == x), ]$barcode
+  #   temp.df <- final.dna %>%
+  #     dplyr::filter(barcode %in% temp.ci)
+  #   dbWriteTable(con,paste0(tolower(x),"_","samstein2018"),temp.df,overwrite = T,row.names = F)
+  # })
+}
+# Miao2018 Pancancer 249
+# 只选择 Bladder， Melanoma    NSCLC 三种
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Miao2018.Rdata")
+  
+  # 计算新抗原
+  clc.neo <- raw.neo %>%
+    dplyr::group_by(Tumor_Sample_Barcode) %>%
+    dplyr::summarise(neoantigen = dplyr::n()) 
+  
+  colnames(raw.cli)
+  table(raw.cli$smoker)
+  final.cli <- raw.cli %>%
+    dplyr::inner_join(clc.neo,by='Tumor_Sample_Barcode') %>%
+    dplyr::select(patient_id,
+                  sample_id = pair_id,
+                  age = age_start_io,
+                  sex,
+                  smoking = smoker,
+                  hist = histology,
+                  orr = RECIST, 
+                  response = roh_response,
+                  neoantigen,
+                  os_months = os_days,os_status = os_censor,
+                  pfs_months = pfs_days,pfs_status = pfs_censor,
+                  cancer = cancer_type,
+                  treatment = drug_type) %>%
+    dplyr::mutate(sex = capitalize(tolower(sex)),
+                  smoking = case_when(smoking %in% c('current','Current','former','Former','former','yes') ~ 'Ever',
+                                      smoking %in% c('never','Never') ~ 'Never',
+                                      TRUE ~ ''),
+                  os_months = os_months /30,
+                  pfs_months = pfs_months /30,
+                  os_status = ifelse(os_status == 1,0,
+                                     ifelse(os_status == 0,1,os_status)),
+                  pfs_status = ifelse(pfs_status == 1,0,
+                                      ifelse(pfs_status == 0,1,pfs_status)),
+                  # icb_type = ifelse(icb_type == 'anti-CTLA-4','CTLA4',
+                  #                   ifelse(icb_type == 'anti-CTLA-4 + anti-PD-1/PD-L1','PD1pCTLA4','PD1')),
+                  cancer = ifelse(cancer == 'Lung','NSCLC',cancer),
+                  response = ifelse(response == 'clinical benefit','DCB','NCB'),
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::mutate(cancer = case_when(cancer == 'Bladder' ~ 'BLCA',
+                                          cancer == 'HNSCC' ~ 'HNSC',
+                                          TRUE ~ cancer)) %>%
+    dplyr::mutate(cancer_detail = ifelse(cancer == 'NSCLC',
+                                         ifelse(hist %in% c('squamous cell carcinoma','Squamous Cell Carcinoma'),'LUSC','LUAD'),
+                                         cancer)) %>%
+    dplyr::select(patient_id,sample_id,
+                  age,sex,smoking,
+                  cancer,cancer_detail,
+                  neoantigen,
+                  pfs_months,pfs_status,
+                  os_months,os_status,
+                  treatment,ici_treatment,orr,response,
+                  seq_type)
+  table(final.cli$cancer_detail)
+  table(final.cli$smoking)
+  # 其他瘤种数目太少，因此不考虑
+  final.cli <- final.cli %>%
+    dplyr::filter(cancer %in% c('BLCA','Melanoma','NSCLC'))
+  table(final.cli$cancer_detail)
+  # 临床信息入表
+  dbWriteTable(con,"miao_2018_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double',"os_status"='double'))
+  
+  # 突变信息入表
+  colnames(raw.csv)
+  final.dna <- raw.csv %>%
+    dplyr::rename(sample_id = pair_id) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_position,end_position = End_position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_p_short = Protein_Change) %>%
+    tibble::add_column('hgvs_c' = NA,.after = 'tumor_seq_allele2') %>%
+    tibble::add_column('hgvs_p' = NA,.after = 'hgvs_c')
+  dbWriteTable(con,"miao_2018_mutation",final.dna,overwrite = T,row.names = F)
+  # # 分瘤种入表
+  # temp.name <- unique(final.cli$cancer_type)
+  # lapply(temp.name, function(x){
+  #   # x <- temp.name[1]
+  #   temp.ci <- final.cli[which(final.cli$cancer_type == x), ]$barcode
+  #   temp.df <- final.dna %>%
+  #     dplyr::filter(barcode %in% temp.ci)
+  #   dbWriteTable(con,paste0(tolower(x),"_","miao2018"),temp.df,overwrite = T,row.names = F)
+  # })
+  
+  
+}
+# Gandara2018 NSCLC 853
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Gadara2018.Rdata")
+  colnames(raw.pts)
+  table(raw.pts$TRT01P)
+  table(raw.pts$PFS_EVENT)
+  final.cli <- raw.pts %>%
+    dplyr::select(sample_id = ID,
+                  age = BAGE,
+                  race = race2,
+                  sex = SEX,
+                  smoking = TOBHX,
+                  cancer_detail = HIST,
+                  orr = BCOR, 
+                  response = RESPONSE,
+                  tmb = btmb,
+                  os_months = OS_MONTHS,os_status = OS_EVENT,
+                  pfs_months = PFS_MONTHS,pfs_status = PFS_EVENT,
+                  treatment = TRT01P,
+                  ici_treatment = TREATMENT,
+                  cfdna_input_ng = cfDNA_Input_ng,
+                  msaf = MSAF,
+                  dedian_exon_coverage = Median_exon_coverage,
+                  tc1ic1 = TC1IC1,
+                  tc3ic3 = TC3IC3,
+                  study) %>%
+    dplyr::mutate(sample_id = paste0("pts",sample_id),
+                  patient_id = sample_id,
+                  smoking = capitalize(tolower(case_when(smoking == 'PREVIOUS' ~ "Former", 
+                                                         TRUE ~ smoking))),
+                  sex = case_when(sex == 'M' ~ "Male", 
+                                  sex == 'F' ~ "Female", 
+                                  TRUE ~ ""),
+                  ici_treatment = case_when(ici_treatment == 0 ~ "No", 
+                                            ici_treatment == 1 ~ "Yes", 
+                                            TRUE ~ ""),
+                  response = case_when(response == 0 ~ "NCB", 
+                                       response == 1 ~ "DCB", 
+                                       TRUE ~ ""),
+                  cancer = 'NSCLC',
+                  cancer_detail = case_when(cancer_detail == 'SQUAMOUS' ~ 'LUSC',
+                                            cancer_detail == 'NON-SQUAMOUS' ~ 'LUAD',
+                                            TRUE ~''),
+                  seq_type = 'NGS') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,race,smoking,
+                  cancer,cancer_detail,
+                  tmb,
+                  pfs_months,pfs_status,
+                  os_months,os_status,
+                  treatment,ici_treatment,orr,response,
+                  seq_type,
+                  everything())
+  table(final.cli$os_status)
+  table(final.cli$cancer_detail)
+  # 临床信息入表
+  dbWriteTable(con,"gandara_2018_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double',"os_status"='double'))
+
+  # ALTER TABLE icbcohorts.gandara_2018_clinical MODIFY COLUMN pfs_status DOUBLE NULL;
+  # ALTER TABLE icbcohorts.gandara_2018_clinical MODIFY COLUMN os_status DOUBLE NULL;
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::select(study = Study,
+                  sample_id = PtID,
+                  hugo_symbol = gene_name,
+                  chromosome,start_position = start,end_position = end,
+                  variant_classification = effect,
+                  af,depth,
+                  reference_allele = reference_sequence,tumor_seq_allele1 = reference_sequence,tumor_seq_allele2 = alternate_sequence,
+                  hgvs_c = cds_syntax,hgvs_p = protein_syntax,hgvs_p_short = protein_syntax)%>%
+    tibble::add_column(variant_type = NA,.after = 'variant_classification') %>%
+    dplyr::mutate(sample_id = paste0("pts",sample_id),
+                  variant_type = ifelse(grepl("A|T|G|C",tumor_seq_allele1) &
+                                          grepl("A|T|G|C",tumor_seq_allele2),'SNP',
+                                        ifelse(grepl("-",tumor_seq_allele1) |
+                                                 grepl("-",tumor_seq_allele2),'INDEL','')))
+  dbWriteTable(con,"gandara_2018_mutation",final.dna,overwrite = T,row.names = F)
+}
+# Rizvi2015 NSCLC 34
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Rizvi2015.Rdata")
+  colnames(raw.pts)
+  table(raw.pts$TREATMENT_BEST_RESPONSE)
+  final.cli <- raw.sam %>%
+    dplyr::select(SAMPLE_ID, PATIENT_ID) %>%
+    dplyr::inner_join(raw.pts,by='PATIENT_ID') %>%
+    dplyr::select(patient_id = PATIENT_ID,
+                  sample_id = SAMPLE_ID,
+                  age = AGE,
+                  sex = SEX,
+                  smoking = SMOKING_HISTORY,
+                  smoking_year = SMOKING_PACK_YEARS,
+                  # hist = HISTOLOGY,
+                  orr = TREATMENT_BEST_RESPONSE,
+                  response = DURABLE_CLINICAL_BENEFIT,
+                  pdl1 = PDL1_EXPRESSION,  # 此处是分类，所以暂时不引入
+                  tmb = NONSYNONYMOUS_MUTATION_BURDEN,
+                  neoantigen = NEOANTIGEN_BURDEN,
+                  pfs_months = PFS_MONTHS,pfs_status = EVENT_TYPE,treatment = AGENT) %>%
+    dplyr::mutate(pfs_status = ifelse(pfs_status == 'Progression-free Survival',0,1),
+                  orr = ifelse(orr == 'POD','PD',orr),
+                  response = ifelse(response == 'No durable benefit','NCB','DCB'),
+                  pdl1 = ifelse(pdl1 == 'Strong(>or =50% membraneous staining)','Strong',
+                                ifelse(pdl1 == 'Weak(1-49% membraneous staining','Weak',
+                                       ifelse(pdl1 == 'Negative(<1% membraneous staining)','Negative',''))),
+                  cancer = 'NSCLC',
+                  cancer_detail = "LUAD",
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::filter(sample_id != 'R7495_2') %>% # R7495_2 样本是R7495的重复，R7495_2才有突变数据，R7495无
+    dplyr::mutate(sample_id = ifelse(sample_id == 'R7495','R7495_2',sample_id)) %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,smoking,smoking_year,
+                  cancer,cancer_detail,
+                  tmb,neoantigen,pdl1,
+                  pfs_months,pfs_status,
+                  treatment,ici_treatment,orr,response,
+                  seq_type)
+  
+  
+  # 临床信息入表
+  dbWriteTable(con,"rizvi_2015_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double'))
+  
+  # 突变信息入表
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  dbWriteTable(con,"rizvi_2015_mutation",final.dna,overwrite = T,row.names = F)
+  
+  length(unique(final.dna$hugo_symbol))
+}
+# Rizvi2018 NSCLC 240
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Rizvi2018.Rdata")
+  colnames(raw.pts)
+  table(raw.pts$DURABLE_CLINICAL_BENEFIT)
+  final.cli <- raw.sam %>%
+    dplyr::select(sample_id = SAMPLE_ID, 
+                  ID = PATIENT_ID,
+                  PDL1_SCORE,CANCER_TYPE_DETAILED,MUTATION_RATE,FGA) %>%
+    dplyr::inner_join(raw.pts,by='ID') %>%
+    dplyr::select(patient_id = ID,
+                  sample_id,
+                  age = AGE,
+                  sex = SEX,
+                  smoking = SMOKER,
+                  orr = BOR, 
+                  response = DURABLE_CLINICAL_BENEFIT,
+                  pdl1_exp = PDL1_SCORE,  
+                  tmb = MUTATION_RATE,
+                  # neoantigen = NEOANTIGEN_BURDEN,
+                  # os_times = OS_MONTHS,os_status = PFS_STATUS,
+                  pfs_months = PFS_MONTHS,pfs_status = PFS_EVENT,
+                  treatment = TREATMENT_TYPE,
+                  cancer_detail = CANCER_TYPE_DETAILED,
+                  line_of_tx = LINES_OF_TX,
+                  fga = FGA) %>%
+    dplyr::mutate(orr = ifelse(orr == 'SD_','SD',orr),
+                  response = ifelse(response == 'YES','DCB',
+                                    ifelse(response =='NO','NCB','')),
+                  pdl1 = ifelse(pdl1_exp >=50,'Strong',
+                                ifelse(pdl1_exp < 50 & pdl1_exp >= 1,'Weak',
+                                       ifelse(pdl1_exp < 1,'Negative',''))),
+                  cancer = 'NSCLC',
+                  cancer_detail = ifelse(cancer_detail == 'Lung Squamous Cell Carcinoma','LUSC','LUAD'),
+                  ici_treatment = 'Yes',
+                  seq_type = 'NGS') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,smoking,
+                  cancer,cancer_detail,
+                  tmb,pdl1,pdl1_exp,
+                  pfs_months,pfs_status,
+                  treatment,ici_treatment,line_of_tx,orr,response,
+                  seq_type)
+  table(final.cli$cancer_detail)
+  # 临床信息入表
+  dbWriteTable(con,"rizvi_2018_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double'))
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode_Long) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_c_short = HGVSp_Short)
+  dbWriteTable(con,"rizvi_2018_mutation",final.dna,overwrite = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Allen2015 Melanoma 110
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Allen2015.Rdata")
+  colnames(raw.pts)
+  table(raw.pts$group)
+  final.cli <- raw.pts %>%
+    dplyr::select(sample_id = patient,
+                  age = age_start,
+                  sex =gender,
+                  # hist = histology,
+                  stage,
+                  stage_m = M,
+                  orr = RECIST, 
+                  response = group,
+                  tmb = nonsynonymous,
+                  os_months = overall_survival,os_status = event,
+                  pfs_months = progression_free,pfs_status = pfs_event,
+                  line_of_tx = pre_therapies) %>%
+    dplyr::mutate(patient_id = sample_id,
+                  age = as.numeric(age),
+                  sex = capitalize(tolower(sex)),
+                  stage = ifelse(stage == 'stage 4','IV',"III"),  # 只有3和4
+                  os_months = os_months / 30,
+                  pfs_months = pfs_months/30,
+                  response = ifelse(response == 'nonresponse','NCB',
+                                    ifelse(response == 'response','DCB','')),
+                  cancer = 'Melanoma',
+                  cancer_detail = 'Melanoma',
+                  treatment = 'CTLA4',
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,
+                  cancer,cancer_detail,
+                  tmb,
+                  pfs_months,pfs_status,os_months,os_status,
+                  treatment,ici_treatment,line_of_tx,orr,response,
+                  seq_type)
+  # 临床信息入表
+  # dbCreateTable(con,"clinical_info",final.cli,fields =c("pdl1"='text'))
+  dbWriteTable(con,"allen_2015_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double',"os_status"='double'))
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = patient) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,entrez_gene_id = Entrez_Gene_Id,
+                  chromosome = Chromosome,start_position = Start_position,end_position = End_position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = cDNA_Change,hgvs_p = Codon_Change,hgvs_c_short = Protein_Change)
+  dbWriteTable(con,"allen_2015_mutation",final.dna,overwrite = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Hugo2016 Melanoma 38
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Hugo2016.Rdata")
+  colnames(raw.sam)
+  table(raw.sam$TREATMENT_RESPONSE)
+  final.cli <- raw.sam %>%
+    # dplyr::select(SAMPLE_ID, PATIENT_ID,MUTATION_LOAD, NEOAGCNT,TREATMENT_RESPONSE) %>%
+    dplyr::inner_join(raw.pts,by='PATIENT_ID') %>%
+    dplyr::select(patient_id = PATIENT_ID,
+                  sample_id = SAMPLE_ID,
+                  age = AGE_AT_DIAGNOSIS,
+                  sex = SEX,
+                  stage_m = M_STAGE,
+                  pre_mapki = PREVIOUS_MAPKI,
+                  orr = DURABLE_CLINICAL_BENEFIT, 
+                  response = TREATMENT_RESPONSE,
+                  tmb = MUTATION_LOAD,
+                  neoantigen = NEOAGCNT,
+                  os_months = OS_MONTHS,os_status = OS_STATUS,
+                  cyt_score = CYTOLYTIC_SCORE,
+                  tumor_purity = PURITY,
+                  treatment  = TREATMENT
+    ) %>%
+    dplyr::mutate(os_status = ifelse(os_status == '0:LIVING',0,1)) %>%
+    dplyr::mutate(cancer = 'Melanoma',
+                  cancer_detail = 'Melanoma',
+                  response = ifelse(response == 'Non-responder','NCB',
+                                    ifelse(response == 'Responder','DCB','')),
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,stage_m,
+                  cancer,cancer_detail,
+                  tmb,neoantigen,cyt_score,tumor_purity,
+                  os_months,os_status,
+                  treatment,ici_treatment,orr,response,pre_mapki,
+                  seq_type)
+  # 临床信息入表
+  dbWriteTable(con,"hugo_2016_clinical",final.cli,overwrite  = T,row.names = F,
+               fields =c("os_status"='double'))
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_c_short =HGVSp_Short)
+  dbWriteTable(con,"hugo_2016_mutation",final.dna,overwrite = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Synder2014 Melanoma 64
+{
+  load("../../../../../Biodatas/ICIcohorts/R.rlog2020/Pkg4Share/source.data/file.Synder2014.Rdata")
+  colnames(raw.pts)
+  final.cli <- raw.sam %>%
+    # dplyr::select(sample_id = SAMPLE_ID, PATIENT_ID,MUTATION_LOAD, NEOAGCNT,TUMOR_STAGE) %>%
+    dplyr::inner_join(raw.pts,by='PATIENT_ID') %>%
+    dplyr::select(patient_id = PATIENT_ID,
+                  sample_id = SAMPLE_ID,
+                  age = AGE,
+                  sex = SEX,
+                  stage = TUMOR_STAGE,
+                  stage_m = M_STAGE,
+                  response = DURABLE_CLINICAL_BENEFIT,
+                  tmb = MUTATION_LOAD,
+                  neoantigen = NEOAGCNT,
+                  treatment = TREATMENT,
+                  cyt_score = CYTOLYTIC_SCORE,
+                  biopsy_time = BIOPSY_TIME,
+                  os_months = OS_MONTHS,os_status = OS_STATUS) %>%
+    dplyr::mutate(os_status = ifelse(os_status == '0:LIVING',0,1)) %>%
+    dplyr::mutate(cancer = 'Melanoma',
+                  cancer_detail = 'Melanoma',
+                  response = ifelse(response == 'NB','NCB','DCB'),
+                  stage = ifelse(stage == 3,'III','IV'),
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::select(sample_id,patient_id,
+                  age,sex,stage,stage_m,
+                  cancer,cancer_detail,
+                  tmb,neoantigen,cyt_score,biopsy_time,
+                  os_months,os_status,
+                  treatment,ici_treatment,response,
+                  seq_type)
+  
+  # 临床信息入表
+  dbWriteTable(con,"synder_2014_clinical",final.cli,overwrite  = T,row.names = F,
+               fields =c("os_status"='double'))
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Tumor_Sample_Barcode) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_c_short = HGVSp_Short)
+  dbWriteTable(con,"synder_2014_mutation",final.dna,overwrite = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Liu2019 Melanoma 144
+{
+  raw.pts <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/C.Melanoma_Liu2019_WES_144/Supplementary Tables 1–9.xlsx",
+                                 sheet = 1,startRow = 3,rowNames = T)
+  raw.dna <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/C.Melanoma_Liu2019_WES_144/Gene-level mutation calls.xlsx",
+                                 sheet =1,startRow = 6)
+  colnames(raw.pts)
+  final.cli <- raw.pts %>%
+    dplyr::filter(!is.na(total_muts)) %>%
+    tibble::rownames_to_column(var = 'sample_id') %>%
+    dplyr::select(sample_id,
+                  sex = `gender.(Male=1,.Female=0)`,
+                  stage_m = `Mstage.(IIIC=0,.M1a=1,.M1b=2,.M1c=3)`,
+                  orr = BR,
+                  tmb = nonsyn_muts,
+                  neoantigen = total_neoantigens,
+                  os_months = OS,os_status = dead,
+                  pfs_months = PFS,pfs_status = progressed,
+                  treatment = IOTherapy,
+                  tumor_purity = purity
+    ) %>%
+    dplyr::mutate(patient_id = sample_id,
+                  os_months = os_months / 30,
+                  pfs_months = pfs_months / 30,
+                  sex = ifelse(sex == 1,'Male','Female'),
+                  stage_m = ifelse(stage_m == 0,'IIIC',
+                                   ifelse(stage_m == 1,'M1a',
+                                          ifelse(stage_m == 2,'M1b','M1c')))) %>%
+    dplyr::mutate(cancer = 'Melanoma',
+                  cancer_detail = 'Melanoma',
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES') %>%
+    dplyr::select(patient_id,sample_id,
+                  sex,stage_m,
+                  cancer,cancer_detail,
+                  tmb,neoantigen,tumor_purity,
+                  pfs_months,pfs_status,
+                  os_months,os_status,
+                  treatment,ici_treatment,orr,
+                  seq_type)
+  
+  # 临床信息入表
+  dbWriteTable(con,"liu_2019_clinical",final.cli,overwrite  = T,row.names = F,
+               fields =c("pfs_status"='double',"os_status"='double'))
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(sample_id = Patient) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_position,end_position = End_position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  # reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = cDNA_Change) %>%
+    tibble::add_column(reference_allele = NA,.after = 'variant_type') %>%
+    tibble::add_column(tumor_seq_allele1 = NA,.after = 'reference_allele') %>%
+    tibble::add_column(tumor_seq_allele2 = NA,.after = 'tumor_seq_allele1') %>%
+    tibble::add_column(hgvs_p = NA,.after = 'hgvs_c') %>%
+    tibble::add_column(hgvs_c_short = NA,.after = 'hgvs_p') 
+  dbWriteTable(con,"liu_2019_mutation",final.dna,overwrite  = T,row.names = F)
+  length(unique(final.dna$hugo_symbol))
+}
+# Riaz2017 Melanoma 73/68, 所有患者的status为dead！
+if(F){
+  raw.pts <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/C.Melanoma_Riaz2017_WES_68_GSE91061/2017.bms038.melanoma.gse91061 Sup/NIHMS907788-supplement-9.xlsx",
+                                 sheet  =1,startRow = 3)
+  raw.dna <- openxlsx::read.xlsx("../C.Melanoma_Riaz2017_WES_68_GSE91061/2017.bms038.melanoma.gse91061 Sup/NIHMS907788-supplement-10.xlsx",
+                                 sheet = 1,startRow = 4)
+  
+  length(intersect(unique(raw.pts$Patient),unique(raw.dna$Patient)))
+  colnames(raw.pts)
+  final.cli <- raw.pts %>%
+    dplyr::filter(Patient %in% raw.dna$Patient) %>%
+    dplyr::select(barcode = Patient,
+                  # age = AGE,
+                  # sex = `gender.(Male=1,.Female=0)`,
+                  # smoking = SMOKING_STATUS,
+                  # hist = HISTOLOGY,
+                  # stage = TUMOR_STAGE,
+                  m_stage = M.Stage,
+                  orr = Response,
+                  # pdl1 = PDL1_EXP,
+                  tmb = Mutation.Load,
+                  neoantigen = `Neo-antigen.Load`,
+                  os_times = `Time.to.Death.(weeks)`,os_status = `Dead/Alive.(Dead.=.True)`,
+                  # pfs_times = PFS,pfs_status = progressed
+                  icb_type = Cohort
+    ) %>%
+    dplyr::mutate(os_times = os_times*7 / 30, # week to months
+                  os_status = ifelse(os_status == 'TRUE',1,0),
+                  m_stage = ifelse(m_stage == 'UNKNOWN',NA,m_stage)) %>%
+    dplyr::mutate(cancer_type = 'Melanoma',
+                  cancer_detail = 'Melanoma',
+                  icb_type = ifelse(icb_type == 'NIV3-NAIVE','PD1','PD1pCTLA4'),
+                  cohort = 'Riaz2017',
+                  table_name = 'melanoma_riaz2017',
+                  seq_type = 'WES') %>%
+    tibble::add_column(age  = NA,.after = 'barcode')%>%
+    tibble::add_column(sex = '',.after = 'age')%>%
+    tibble::add_column(smoking = '',.after = 'sex')%>%
+    tibble::add_column(response = '',.after = 'orr')%>%
+    tibble::add_column(hist = '',.after = 'smoking')%>%
+    tibble::add_column(stage = '',.after = 'hist')%>%
+    tibble::add_column(pdl1 = '',.after = 'orr') %>%
+    tibble::add_column(pfs_times = NA,.after = 'os_status')%>%
+    tibble::add_column(pfs_status = NA,.after = 'pfs_times')
+  
+  
+  # 临床信息入表
+  dbWriteTable(con,"clinical_info",final.cli,append = T,row.names = F)
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(barcode = Patient) %>%
+    dplyr::select(barcode, hugo_symbol= Hugo.Symbol,
+                  chromosome = Chromosome,start_position = Start,end_position = End,
+                  variant_classification = Variant.Classification,# variant_type = Variant_Type,
+                  # reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  HGVSc = HGVS_c,HGVSp = HGVS_p,HGVSp_Short = HGVS_p) %>%
+    tibble::add_column(variant_type = NA,.after = 'variant_classification')%>%
+    tibble::add_column(reference_allele = NA,.after = 'variant_type') %>%
+    tibble::add_column(tumor_seq_allele1 = NA,.after = 'reference_allele') %>%
+    tibble::add_column(tumor_seq_allele2 = NA,.after = 'tumor_seq_allele1')  %>%
+    dplyr::mutate(variant_classification = Hmisc::capitalize(variant_classification))
+  dbWriteTable(con,"melanoma_riaz2017",final.dna,overwrite = T,row.names = F)
+}
+# CheckMate009/010/025 ccRCC  454 (261 NIVOLUMAB, 193 EVEROLIMUS)
+{
+  raw.pts <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/D.ccRCC.CM009010025.Nature2020/41591_2020_839_MOESM2_ESM.xlsx",
+                                 sheet = 1,startRow = 2)
+  raw.dna <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/D.ccRCC.CM009010025.Nature2020/41591_2020_839_MOESM2_ESM.xlsx",
+                                 sheet = 2,startRow = 2)
+  raw.rna <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/D.ccRCC.CM009010025.Nature2020/41591_2020_839_MOESM2_ESM.xlsx",
+                                 sheet = 5,startRow = 2)
+  colnames(raw.pts)
+  table(raw.pts$Sex)
+  table(raw.pts$irORR)
+  table(raw.pts$Benefit)
+  table(raw.pts$Arm)
+  final.cli <- raw.pts %>%
+    # dplyr::filter(!is.na(MAF_Tumor_ID)) %>%
+    dplyr::select(patient_id =  SUBJID,
+                  maf_tumor_id = MAF_Tumor_ID,
+                  cnv_id = CNV_ID,
+                  rna_id = RNA_ID,
+                  cohort = Cohort,
+                  age = Age,
+                  sex = Sex,
+                  orr = ORR,
+                  response = Benefit,
+                  tmb = TMB_Counts,wgii = WGII,ith = ITH,
+                  os_months = OS,os_status = OS_CNSR,
+                  pfs_months = PFS,pfs_status = PFS_CNSR,
+                  treatment = Arm,
+                  tumor_purity = Purity,
+                  ploidy = Ploidy,
+                  tumor_sample_type = Tumor_Sample_Primary_or_Metastasis,
+                  irorr = irORR,
+                  irpfs_months = irPFS,
+                  irpfs_status = irPFS_CNSR
+    ) %>%
+    dplyr::mutate(sample_id = patient_id,
+                  sex = case_when(sex %in% c('F','FEMALE','Female') ~ 'Female',
+                                  sex %in% c('M','MALE','Male') ~ 'Male',
+                                  TRUE ~ ''),
+                  orr = case_when(orr %in% c('CR','CRPR','PR') ~ 'CRPR',
+                                  orr %in% c('SD') ~ 'SD',
+                                  orr %in% c('PD') ~ 'PD',
+                                  TRUE ~ ''),
+                  cancer = 'KIRC',
+                  cancer_detail = 'KIRC',
+                  response = case_when(response %in% c('CB','ICB')~"DCB",
+                                       response %in% c('NCB')~"NCB",
+                                       TRUE ~ ''),
+                  ici_treatment = case_when(treatment == 'EVEROLIMUS'~'No',
+                                            treatment == 'NIVOLUMAB'~'Yes',
+                                            TRUE ~ ''),
+                  seq_type = 'WES') %>%
+    dplyr::select(patient_id,sample_id,maf_tumor_id,cnv_id,rna_id,cohort,
+                  age,sex,
+                  cancer,cancer_detail,
+                  tmb,tumor_purity,ploidy,wgii,ith,
+                  pfs_months,pfs_status,
+                  os_months,os_status,
+                  irpfs_months,irpfs_status,
+                  treatment,ici_treatment,orr,response,
+                  seq_type)
+  
+  # 临床信息入表
+  table(final.cli$cohort)
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-009') 
+  dbWriteTable(con,"checkmate009_clinical",temp.cli,overwrite = T,row.names = F)
+  # sql.upd <- paste0("ALTER TABLE checkmate025_clinical MODIFY COLUMN pfs_status DOUBLE NULL;")
+  # dbSendStatement(con,sql.upd)
+  
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-010')
+  dbWriteTable(con,"checkmate010_clinical",temp.cli,overwrite = T,row.names = F)
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-025') 
+  dbWriteTable(con,"checkmate025_clinical",temp.cli,overwrite = T,row.names = F)
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::rename(maf_tumor_id = Tumor_Sample_Barcode,
+                  hgvs_c = cDNA_Change,
+                  hgvs_p = Codon_Change,
+                  hgvs_c_short = Protein_Change)
+  colnames(final.dna) <- tolower(colnames(final.dna))
+  # 新增sample_id
+  final.dna <- final.dna %>%
+    dplyr::right_join(dplyr::select(final.cli,sample_id,maf_tumor_id),.,by='maf_tumor_id')
+  
+  temp.dna <- final.dna %>%
+    dplyr::filter(cohort == 'CM-009') 
+  dbWriteTable(con,"checkmate009_mutation",temp.dna,overwrite = T,row.names = F)
+  temp.dna <- final.dna %>%
+    dplyr::filter(cohort == 'CM-010')
+  dbWriteTable(con,"checkmate010_mutation",temp.dna,overwrite = T,row.names = F)
+  temp.dna <- final.dna %>%
+    dplyr::filter(cohort == 'CM-025') 
+  dbWriteTable(con,"checkmate025_mutation",temp.dna,overwrite = T,row.names = F)
+  
+  
+  # RNA（TPM+ 20?）
+  temp.cli <- final.cli %>%
+    dplyr::select(sample_id,rna_id)  %>%
+    dplyr::filter(!is.na(rna_id))
+  raw.rna[1:5,1:6]
+  clc.rna <- raw.rna %>%
+    dplyr::select(hugo_symbol = gene_name,temp.cli$rna_id) %>%
+    extract.max("hugo_symbol")
+  clc.rna2 <- clc.rna %>%
+    tibble::column_to_rownames(var = 'Symbol') %>%
+    t() %>% as.data.frame() %>%
+    tibble::rownames_to_column(var = 'rna_id') %>%
+    dplyr::right_join(temp.cli,.,by='rna_id') %>%
+    dplyr::select(-rna_id) %>%
+    tibble::column_to_rownames(var = 'sample_id') %>%
+    t() %>% as.data.frame() %>%
+    tibble::rownames_to_column(var = 'hugo_symbol')
+  # 逐个队列提取入库
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-009') %>%
+    dplyr::select(sample_id,rna_id)  %>%
+    dplyr::filter(!is.na(rna_id))
+  clc.rna.f <- clc.rna2 %>%
+    dplyr::select(hugo_symbol,temp.cli$sample_id)
+  dbWriteTable(con,"checkmate009_expr",clc.rna.f,overwrite = T,row.names = F)
+  
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-010') %>%
+    dplyr::select(sample_id,rna_id)  %>%
+    dplyr::filter(!is.na(rna_id))
+  clc.rna.f <- clc.rna2 %>%
+    dplyr::select(hugo_symbol,temp.cli$sample_id)
+  dbWriteTable(con,"checkmate010_expr",clc.rna.f,overwrite = T,row.names = F)
+  
+  temp.cli <- final.cli %>%
+    dplyr::filter(cohort == 'CM-025') %>%
+    dplyr::select(sample_id,rna_id)  %>%
+    dplyr::filter(!is.na(rna_id))
+  clc.rna.f <- clc.rna2 %>%
+    dplyr::select(hugo_symbol,temp.cli$sample_id)
+  dbWriteTable(con,"checkmate025_expr",clc.rna.f,overwrite = T,row.names = F)
+  
+}
+
+# INHOUSE队列 ----
+# Zhang2019_WES_79
+{
+  raw.pts <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/A.NSCLC_Zhang2019_WES_79/Clean可用数据/Clincial_79_PD1.xlsx",sheet = 1,startRow = 1)
+  raw.dna <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Zhang2019_WES_79/Clean可用数据/Mutation_WES_99.maf")
+  
+  # 临床信息入表
+  colnames(raw.pts)
+  clc.cli <- raw.pts %>%
+    dplyr::select(sample_id = Tumor_Sample_Barcode,
+                  age = Age,
+                  sex = Sex,
+                  smoking = moking,
+                  cancer_detail = pathology,
+                  stage = Stage,
+                  egfr = EGFR,
+                  tp53 = TP53,
+                  kras = KRAS,
+                  ecog = ECOG,
+                  orr = ORR,
+                  irorr = irORR,
+                  pdl1 = PDL1,
+                  # pdl1_exp = PDL1expression,
+                  response = DCB,
+                  tmb = TMB_wes,
+                  pfs_months = PFS_Day,pfs_status = PFS_Status,
+                  irpfs_months = irPFS,irpfs_status = irPD_Status,
+                  line_treatment = line.of.treatment,
+                  treatment = Drug_type) %>%
+    dplyr::mutate(patient_id = sample_id,
+                  sex = ifelse(sex == 0,'Female','Male'),
+                  cancer_detail = case_when(cancer_detail == 0 ~'LUSC',
+                                            cancer_detail == 1 ~'LUAD',
+                                            TRUE ~ ''),
+                  smoking = case_when(smoking == 1 ~ 'Ever',
+                                      smoking == 0 ~ 'Never',
+                                      TRUE ~ ''),
+                  egfr = case_when(egfr == 1 ~ 'Yes',
+                                   egfr == 0 ~ 'No',
+                                      TRUE ~ ''),
+                  tp53 = case_when(tp53 == 1 ~ 'Yes',
+                                   tp53 == 0 ~ 'No',
+                                      TRUE ~ ''),
+                  kras = case_when(kras == 1 ~ 'Yes',
+                                   kras == 0 ~ 'No',
+                                      TRUE ~ ''),
+                  stage = gsub("A|B|C","",stage),
+                  pdl1 = ifelse(pdl1 == '低表达','Weak',
+                                ifelse(pdl1 == '高表达','Strong',
+                                       ifelse(pdl1 == '阴性','Negative',''))),
+                  response = ifelse(response == 1,'DCB','NCB'),
+                  pfs_months = pfs_months/30,
+                  pfs_status = as.numeric(pfs_status),
+                  irpfs_months = irpfs_months /30,
+                  irpfs_status = as.numeric(irpfs_status),
+                  treatment = case_when(treatment %in% c('Nivo','Nivolumab') ~ 'Nivolumab',
+                                        treatment %in% c('ATEZO') ~ 'Atezolizumab',
+                                        treatment %in% c('Pembro') ~ 'Pembrolizumab',
+                                        treatment %in% c('SHR1210') ~ 'Camrelizumab',
+                                        TRUE ~ treatment)) %>%
+    dplyr::mutate(cancer = 'NSCLC',
+                  seq_type = 'WES',
+                  ici_treatment = 'Yes',
+                  treatment_drug_type = case_when(treatment %in% c('Atezolizumab','Nivolumab','PD-1','Pembrolizumab','Camrelizumab') ~ 'anti-PD-1',
+                                                  TRUE ~ '')) %>%
+    dplyr::select(patient_id,sample_id,cancer,cancer_detail, 
+                  age,sex,stage,smoking,ecog,tp53,egfr,kras,
+                  tmb,orr,irorr,pdl1,
+                  line_treatment,ici_treatment,treatment_drug_type,treatment,response,
+                  pfs_months,pfs_status,irpfs_months,irpfs_status,
+                  seq_type)
+  table(clc.cli$cancer_detail)
+  final.cli <- clc.cli
+  dbWriteTable(con,"zhang_2019_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double',"irpfs_status"='double'))
+  # sql.upd <- paste0("ALTER TABLE zhang2019_clinical MODIFY COLUMN pfs_status DOUBLE NULL;")
+  # dbSendStatement(con,sql.upd)
+  
+  # 突变信息入表
+  colnames(raw.dna)
+  final.dna <- raw.dna %>%
+    dplyr::mutate(sample_id = gsub("-WES","",Tumor_Sample_Barcode)) %>%
+    dplyr::select(sample_id, hugo_symbol= Hugo_Symbol,
+                  chromosome = Chromosome,start_position = Start_Position,end_position = End_Position,
+                  variant_classification = Variant_Classification,variant_type = Variant_Type,
+                  reference_allele = Reference_Allele,tumor_seq_allele1 = Tumor_Seq_Allele1,tumor_seq_allele2 = Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  dbWriteTable(con,"zhang_2019_mutation",final.dna,overwrite = T,row.names = F)
+}
+# Wang2019_Panel_50,PMID 30816954
+{
+  raw.pts <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2020_ctDNA_50/data_clinical_patient_utf8.txt")
+  raw.dna <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2020_ctDNA_50/data_mutations_extended.txt")
+  
+  clc.cli <- raw.pts %>%
+    dplyr::select(sample_id = ID,
+                  age = AGE,
+                  sex = SEX,
+                  smoking = SMOKING,
+                  ecog = ECOG,
+                  stage = STAGE,
+                  btmb = bTMB,
+                  ldh = LDH,
+                  cancer_detail = Pathology,
+                  line_treatment = TREATMENT_CURRENT,
+                  pfs_months = PFS_MONTHS,pfs_status = PFS_EVENT,
+                  orr = RECIST_RESPONSE,
+                  treatment = TREATMENT,
+                  response = RESPONSE
+                  ) %>%
+    dplyr::mutate(sex = capitalize(tolower(sex)),
+                  smoking = case_when(smoking %in%  c('CURRENT_SMOKER','PREVIOUS_SMOKER') ~ 'Ever',
+                                      smoking == 'NEVER'~'Never',
+                                      TRUE ~ ''),
+                  stage = gsub("A|B|C","",stage),
+                  cancer_detail = case_when(cancer_detail == 'adenocarcinoma' ~ 'LUAD',
+                                            cancer_detail == 'squamous cell carcinoma' ~ 'LUSC',
+                                            TRUE ~ ''),
+                  treatment = case_when(treatment == '君实PD-1' ~ 'Toripalimab',
+                                        treatment == '百济PD-1' ~ 'Tislelizumab',
+                                        treatment == '国产PD-1' ~ 'PD-1',
+                                        TRUE ~ capitalize(treatment)),
+                  response = case_when(response == 1 ~ 'DCB',
+                                       response == 0 ~ 'NCB',
+                                       TRUE ~ '')) %>%
+    dplyr::mutate(patient_id = sample_id,
+                  ici_treatment = 'Yes',
+                  treatment_drug_type = 'Anti-PD-1',
+                  cancer = 'NSCLC',
+                  seq_type = 'Panel') %>%
+    dplyr::select(patient_id,sample_id,cancer,cancer_detail, 
+                  age,sex,stage,smoking,ecog,ldh,
+                  btmb,orr,
+                  line_treatment,ici_treatment,treatment_drug_type,treatment,response,
+                  pfs_months,pfs_status,
+                  seq_type)
+  table(clc.cli$cancer_detail)
+  final.cli <- clc.cli
+  dbWriteTable(con,"wang_2019_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double'))
+  
+  colnames(raw.dna)
+  clc.dna <- raw.dna %>%
+    dplyr::select(sample_id = Tumor_Sample_Barcode,
+                  hugo_symbol = Hugo_Symbol,
+                  Variant_Classification,
+                  Chromosome,Start_Position,End_Position,
+                  Reference_Allele,Tumor_Seq_Allele1,
+                  hgvs_p = Amino_acid_change)
+  colnames(clc.dna) <- tolower(colnames(clc.dna))
+  final.dna <- clc.dna
+  dbWriteTable(con,"wang_2019_mutation",final.dna,overwrite = T,row.names = F)
+}
+# Wang2022，ICI队列，(入库名称为：wang_2021,以区分非免疫治疗队列wang_2022)
+{
+  # 临床信息
+  raw.cli <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2022_WES_RNAseq/clinical.xlsx",
+                                 sheet = 2,detectDates = T)
+  raw.tnb <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2022_WES_RNAseq/WES_TNB.csv")
+  # raw.neo <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2022_WES_RNAseq/WES_neoantigen.csv")
+  
+  colnames(raw.cli)
+  table(raw.cli$histology)
+  clc.cli <- raw.cli %>%
+    dplyr::mutate(pfs_months = ifelse(is.na(progression_date),NA,
+                                      as.numeric(difftime(as.Date(as.character(progression_date), format="%Y-%m-%d"),treatment_startdate,units = "days"))/30),
+                  os_months = ifelse(is.na(dead_time),NA,
+                                     as.numeric(difftime(as.Date(as.character(dead_time), format="%Y-%m-%d"),treatment_startdate,units = "days"))/30)) %>%
+    dplyr::select(patient_id = PatientID,
+                  age,
+                  sex,
+                  smoking,
+                  stage,
+                  histology,
+                  chemo_treatment,
+                  ici_treatment,ici_treatment_type,ici_treatment_drug,
+                  orr,
+                  pfs_months,pfs_status,
+                  os_months,os_status) %>%
+    dplyr::mutate(sex = case_when(sex == 0 ~ 'Male',
+                                  sex == 1 ~ 'Female',
+                                  TRUE ~ ''),
+                  cancer_detail = ifelse(histology == '腺癌','LUAD',
+                                         ifelse(histology == '鳞癌','LUSC',
+                                                ifelse(histology == '小细胞癌','SCLC','Others'))),
+                  smoking = case_when(smoking == 0 ~ 'Never',
+                                      smoking %in% c(1,2) ~ 'Ever'),
+                  stage = gsub("A|B|C","",stage),
+                  chemo_treatment = case_when(chemo_treatment == '是' ~ 'Yes',
+                                              chemo_treatment == '否' ~ 'No',
+                                              TRUE ~ ''),
+                  ici_treatment = ifelse(is.na(ici_treatment),'','Yes')
+    ) %>%
+    dplyr::mutate(sample_id = paste0(patient_id),
+                  sample_type = 'T',
+                  cancer = 'NSCLC'
+    ) %>%
+    dplyr::left_join(.,raw.tnb %>%
+                       dplyr::select(sample_id = PatientID,
+                                     neoantigen = TNB),by='sample_id') %>%
+    dplyr::select(patient_id,sample_id,sample_type,cancer,cancer_detail,
+                  age,sex,smoking,stage,
+                  neoantigen,
+                  chemo_treatment,
+                  ici_treatment,ici_treatment_type,ici_treatment_drug,
+                  orr,
+                  pfs_months,pfs_status,os_months,os_status
+                  )
+  
+  # 突变
+  raw.dna <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2022_WES_RNAseq/WES_SNV.csv")
+  colnames(raw.dna)
+  clc.dna <- raw.dna %>%
+    dplyr::select(patient_id = PatientID,
+                  sample_id  =Tumor_Sample_Barcode,
+                  hugo_symbol = Hugo_Symbol,
+                  chromosome = Chromosome,Start_Position,End_Position,
+                  Variant_Classification,Variant_Type,
+                  Reference_Allele,Tumor_Seq_Allele1,Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  colnames(clc.dna) <- tolower(colnames(clc.dna))
+  table(clc.dna$variant_classification)
+  {
+    # 有两个患者分别取了两次样本
+    tmp.dna <- clc.dna %>%
+      # P15:219019746FD 和 219019748FD
+      dplyr::filter(sample_id == '219019748FD')
+    table(tmp.dna$variant_classification)
+    # 取219019746FD，突变更多
+    
+    tmp.dna <- clc.dna %>%
+      # P34:229001216FD 和 229001221FD
+      dplyr::filter(sample_id == '229001221FD')
+    table(tmp.dna$variant_classification)
+    # 取229001216FD，突变更多
+    
+  }
+  clc.dna <- clc.dna %>%
+    dplyr::filter(!sample_id %in% c('219019748FD','229001221FD'))  %>%
+    dplyr::select(-sample_id) %>%
+    dplyr::rename(sample_id = patient_id)
+  clc.tmb <- clc.dna %>%
+    dplyr::filter(variant_classification %in% c('In_Frame_Del','In_Frame_Ins','Silent','Targeted_Region',   # Inframe
+                                                'Missense_Mutation',                                        # Missense
+                                                'Frame_Shift_Del','Frame_Shift_Ins','Nonsense_Mutation','Nonstop_Mutatio','Splice_Site','Splice_Region'  # Truncating
+                                                )) %>%
+    dplyr::select(sample_id,variant_classification) %>%
+    dplyr::group_by(sample_id) %>% 
+    dplyr::summarise(tmb = n()) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(sample_id = gsub("_1","",sample_id))
+  
+  # setdiff(clc.dna$sample_id,clc.cli$sample_id) # 有两个样本有突变但无临床信息
+  
+  clc.cli <- clc.cli %>%
+    # dplyr::select(-sample_id) %>%
+    dplyr::left_join(clc.tmb,by='sample_id') %>%
+    dplyr::select(patient_id,sample_id,sample_type,cancer,cancer_detail,
+                  age,sex,smoking,stage,
+                  tmb,neoantigen,
+                  chemo_treatment,
+                  ici_treatment,ici_treatment_type,ici_treatment_drug,
+                  orr,
+                  pfs_months,pfs_status,os_months,os_status)
+  # 表达
+  raw.rna <- data.table::fread("../../../../../Biodatas/ICIcohorts/A.NSCLC_Wang2022_WES_RNAseq/RNA_count.csv")
+  dim(raw.rna)
+  raw.rna[,1:5]
+  raw.rna <- raw.rna %>%
+    tibble::column_to_rownames(var = 'PatientID') %>%
+    t() %>% as.data.frame() %>%
+    tibble::rownames_to_column(var = 'ENSEMBL')
+  # 提取编码RNA等
+  library(org.Hs.eg.db)
+  tmp.ids <- AnnotationDbi::select(org.Hs.eg.db, keys=raw.rna$ENSEMBL,keytype="ENSEMBL", columns = c("ENTREZID","SYMBOL"))
+  length(unique(raw.rna$ENSEMBL))
+  tmp.ids <- tmp.ids %>%
+    dplyr::distinct() %>%
+    dplyr::filter(!is.na(ENTREZID))
+  clc.rna <- raw.rna %>%
+    dplyr::inner_join(tmp.ids,.,by='ENSEMBL') %>%
+    dplyr::select(-ENSEMBL,-ENTREZID) %>%
+    extract.max('SYMBOL') 
+  clc.rna <- clc.rna %>%
+    dplyr::arrange(Symbol) %>%
+    tibble::column_to_rownames(var = 'Symbol')
+  # count 标准化：log2(CPM(count)+1)
+  count.data <- clc.rna %>%
+    as.matrix() %>%
+    impute::impute.knn()  # 缺失值填充，然后用 sum(is.na(dea.list)) 检查
+  
+  tmp.rna <- edgeR::cpm(count.data$data)
+  tmp.rna <- log2(tmp.rna + 0.001)
+  tmp.rna[1:5,1:10]
+  # 删除全0行
+  tmp.rna <- func.removeRowsAllZero(tmp.rna)
+  clc.rna <- tmp.rna %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = 'hugo_symbol') %>%
+    dplyr::select(-P15_2)
+  colnames(clc.rna) <- gsub("_1|_2","",colnames(clc.rna))
+  
+  # 更新clc.cli
+  # 最后在给临床信息表新增测序字段
+  clc.cli <- clc.cli %>%
+    dplyr::mutate(has_mutation = ifelse(sample_id %in% clc.dna$sample_id,'Yes','No'),
+                  has_expr = ifelse(sample_id %in% colnames(clc.rna),'Yes','No'),
+                  has_proteome = 'No') 
+  length(unique(clc.dna$sample_id))
+  table(clc.cli$cancer_detail)
+  table(clc.cli$has_mutation)
+  table(clc.cli$has_expr) # 发现有表达的样本基本没有生存数据！因此不纳入EPITOME
+  # 数据入表 
+  cohort.name <- "wang_2021"
+  dbWriteTable(con,paste0(cohort.name,"_clinical"),clc.cli,overwrite = T,row.names = F)
+  dbWriteTable(con,paste0(cohort.name,"_mutation"),clc.dna,overwrite = T,row.names = F)
+  dbWriteTable(con,paste0(cohort.name,"_expr"),clc.rna,overwrite = T,row.names = F)
+  
+}
+# Wang2022，非ICI队列，
+{
+  # 临床信息
+  raw.cli <- openxlsx::read.xlsx("../../../../../Biodatas/omicsRepository/INHOUSE_LUAD_OMICS_2022_WANGZHIJIE/术后队列生存-WZJ.xlsx",
+                                 sheet = 1,detectDates = T)
+  raw.neo <- data.table::fread("../../../../../Biodatas/omicsRepository/INHOUSE_LUAD_OMICS_2022_WANGZHIJIE/WES_neoantigen_resection.xls")
+  clc.neo <- raw.neo %>%
+    dplyr::select(patient_id = task_id,epitope = `MT Epitope Seq`) %>%
+    dplyr::group_by(patient_id) %>%
+    dplyr::summarise(neoantigen = n()) %>%
+    dplyr::ungroup()
+  
+  colnames(raw.cli)
+  clc.cli <- raw.cli %>%
+    dplyr::mutate(复发时间END = ifelse(is.na(复发时间),as.character(末次随访时间),as.character(复发时间)),
+                  死亡时间END = ifelse(is.na(死亡时间),as.character(末次随访时间),as.character(死亡时间))) %>%
+    dplyr::mutate(rfs_months = as.numeric(difftime(as.Date(as.character(复发时间END), format="%Y-%m-%d"),手术日期,units = "days"))/30,
+                  os_months = as.numeric(difftime(as.Date(as.character(死亡时间END), format="%Y-%m-%d"),手术日期,units = "days"))/30) %>%
+    dplyr::select(patient_id = 索引号,
+                  age = 年龄,
+                  sex = 性别,
+                  smoking = 吸烟史,
+                  stage = pTNM.stage,
+                  p_t_stage = pT.stage,
+                  n_stage = N.stage,
+                  vpi=VPI,lvi=LVI,
+                  adjuvant_treatment = 术后辅助治疗,
+                  adjuvant_dru = 方案,
+                  surgical_date = 手术日期,
+                  rfs_months,rfs_status = 复发,
+                  os_months,os_status = 生存状态) %>%
+    dplyr::mutate(sex = case_when(sex == 1 ~ 'Male',
+                                  sex == 2 ~ 'Female'),
+                  smoking = case_when(smoking == 0 ~ 'Never',
+                                      smoking %in% c(1,2) ~ 'Ever'),
+                  vpi = case_when(vpi == 0~ 'No',
+                                  vpi == 1~ 'Yes'),
+                  lvi = case_when(lvi == 0~ 'No',
+                                  lvi == 1~ 'Yes'),
+                  stage = gsub("A|B|C","",stage),
+                  adjuvant_treatment = case_when(adjuvant_treatment == 1 ~ 'chemotherapy',
+                                                 adjuvant_treatment == 2 ~ 'radiotherapy',
+                                                 adjuvant_treatment == 3 ~ 'TKI',
+                                                 TRUE ~ '')
+                  ) %>%
+    dplyr::mutate(patient_id = paste0("P",patient_id),
+                  sample_type = 'T',
+                  cancer = 'NSCLC',
+                  cancer_detail = 'LUAD',
+                  chemo_treatment = ifelse(adjuvant_treatment == 'chemotherapy','Yes','No'),
+                  rt_treatment = ifelse(adjuvant_treatment == 'radiotherapy','Yes','No'),
+                  tki_treatment = ifelse(adjuvant_treatment == 'TKI','Yes','No')
+                  ) %>%
+    dplyr::left_join(clc.neo,by='patient_id') %>%
+    dplyr::select(patient_id,sample_type,
+                  age,sex,smoking,stage,visceral_pleural_invasion = vpi,lymphvascular_invasion = lvi,
+                  adjuvant_treatment,chemo_treatment,rt_treatment,tki_treatment,
+                  neoantigen,
+                  rfs_months,rfs_status,os_months,os_status,
+                  cancer,cancer_detail)
+  
+  # 突变
+  raw.dna <- data.table::fread("../../../../../Biodatas/omicsRepository/INHOUSE_LUAD_OMICS_2022_WANGZHIJIE/WES_SNV_resection.xls")
+  colnames(raw.dna)
+  clc.dna <- raw.dna %>%
+    dplyr::select(patient_id = task_id,
+                  sample_id  =Tumor_Sample_Barcode,
+                  hugo_symbol = Hugo_Symbol,
+                  chromosome = Chromosome,Start_Position,End_Position,
+                  Variant_Classification,Variant_Type,
+                  Reference_Allele,Tumor_Seq_Allele1,Tumor_Seq_Allele2,
+                  hgvs_c = HGVSc,hgvs_p = HGVSp,hgvs_p_short = HGVSp_Short)
+  colnames(clc.dna) <- tolower(colnames(clc.dna))
+  table(clc.dna$variant_classification)
+  clc.tmb <- clc.dna %>%
+    dplyr::filter(variant_classification %in% c('Frame_Shift_Del','Frame_Shift_Ins','In_Frame_Del','In_Frame_Ins',
+                                                'Missense_Mutation','Nonsense_Mutation',
+                                                'Nonstop_Mutatio','Splice_Site','Splice_Region',
+                                                'Translation_Start_Site')) %>%
+    dplyr::select(patient_id,sample_id,variant_classification) %>%
+    dplyr::group_by(patient_id,sample_id) %>% # 219018758T
+    dplyr::summarise(tmb = n()) %>%
+    dplyr::ungroup()
+  
+  # setdiff(clc.dna$sample_id,clc.cli$sample_id) # 有两个样本有突变但无临床信息
+  
+  clc.cli <- clc.cli %>%
+    dplyr::left_join(clc.tmb,by='patient_id') %>%
+    dplyr::select(patient_id,sample_id,sample_type,
+                  age,sex,smoking,stage,visceral_pleural_invasion,lymphvascular_invasion,
+                  adjuvant_treatment,chemo_treatment,rt_treatment,tki_treatment,
+                  tmb,neoantigen,
+                  rfs_months,rfs_status,os_months,os_status,
+                  cancer,cancer_detail)
+  # 表达
+  raw.rna <- data.table::fread("../../../../../Biodatas/omicsRepository/INHOUSE_LUAD_OMICS_2022_WANGZHIJIE/RNA_TPM_resection.csv")
+  colnames(raw.rna)
+  
+  # 提取编码RNA等
+  library(org.Hs.eg.db)
+  tmp.ids <- AnnotationDbi::select(org.Hs.eg.db, keys=raw.rna$Symbol,keytype="SYMBOL", columns = c("ENTREZID","ENSEMBL"))
+  length(unique(raw.rna$Symbol))
+  tmp.ids <- tmp.ids %>%
+    dplyr::distinct() %>%
+    dplyr::filter(!is.na(ENTREZID))
+  clc.rna <- raw.rna %>%
+    dplyr::filter(Symbol %in% tmp.ids$SYMBOL) %>%
+    dplyr::select(-GeneID) %>%
+    extract.max('Symbol') 
+  clc.rna <- clc.rna %>%
+    dplyr::arrange(Symbol) %>%
+    tibble::column_to_rownames(var = 'Symbol')
+  clc.rna <- log2(clc.rna+0.001)
+  clc.rna <- clc.rna %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = 'hugo_symbol')
+  tmp.ids <- data.frame(sample_id = colnames(clc.rna))
+  length(intersect(paste0(colnames(clc.rna)),clc.cli$sample_id))
+  setdiff(paste0(colnames(clc.rna)),clc.cli$sample_id)
+  
+  # 更新clc.cli
+  # 最后在给临床信息表新增测序字段
+  clc.cli$rfs_status <- as.numeric(clc.cli$rfs_status)
+  clc.cli <- clc.cli %>%
+    dplyr::mutate(has_mutation = ifelse(sample_id %in% clc.dna$sample_id,'Yes','No'),
+                  has_expr = ifelse(sample_id %in% colnames(clc.rna),'Yes','No'),
+                  has_proteome = 'No') 
+  length(unique(clc.dna$sample_id))
+  table(clc.cli$has_mutation)
+  table(clc.cli$has_expr) # 发现有表达的样本基本没有生存数据！因此不纳入EPITOME
+  # 数据入表 
+  cohort.name <- "wang_2022"
+  dbWriteTable(con,paste0(cohort.name,"_clinical"),clc.cli,overwrite = T,row.names = F)
+  dbWriteTable(con,paste0(cohort.name,"_mutation"),clc.dna,overwrite = T,row.names = F)
+  dbWriteTable(con,paste0(cohort.name,"_expr"),clc.rna,overwrite = T,row.names = F)
+  
+}
+
+# NSCLC GSE136961 ICI----
+# RNAseq为panel测序：Oncomine Immune Response panel
+{
+  raw.cli <- data.table::fread("../../../../../Biodatas/GEO/lung/Korea2020_NSCLC_21/GSE136961_Clincial.tsv")
+  
+  table(raw.cli$`tumor type:ch1`)
+  final.cli <- raw.cli %>%
+    dplyr::mutate(response = ifelse(grepl("D",title),'DCB','NCB'),
+                  OS_status = ifelse(OS_status == 'live',0,1)) %>%
+    dplyr::select(sample_id = title,
+                  patient_id = geo_accession,
+                  sex = `Sex:ch1`,
+                  pfs_months = PFS_days ,
+                  pfs_status = PFS_status,
+                  os_months = OS_days,os_status = OS_status,
+                  cancer_detail_origin = `tumor type:ch1`,response) %>%
+    dplyr::mutate(sex =capitalize(sex),
+                  cancer = 'NSCLC',
+                  cancer_detail = 'NSCLC',
+                  sample_type = "T",
+                  treatment = 'anti-PD-1 ',
+                  ici_treatment = 'Yes',
+                  seq_type = 'RNAseq',
+                  pfs_months = pfs_months/30,os_months = os_months/30) %>%
+    dplyr::select(patient_id,sample_id,
+                  sex,
+                  cancer,cancer_detail,
+                  # tmb,neoantigen,tumor_purity,
+                  pfs_months,pfs_status,
+                  os_months,os_status,
+                  treatment,ici_treatment,response,
+                  seq_type)
+  
+  dbWriteTable(con,"gse136961_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double',"os_status"='double'))
+  sql.upd <- paste0("ALTER TABLE gse136961_clinical MODIFY COLUMN pfs_status DOUBLE NULL;")
+  dbSendStatement(con,sql.upd)
+  
+  raw.rna <- data.table::fread("../../../../../Biodatas/GEO/lung/Korea2020_NSCLC_21/GSE136961_TPM.tsv")
+  final.rna <-raw.rna %>%
+    tidyr::separate(Symbol_ID,sep = "_",into = c('hugo_symbol','entrez_gene_id')) %>%
+    dplyr::select(-entrez_gene_id) %>%
+    extract.max('hugo_symbol') %>%
+    tibble::column_to_rownames(var = 'Symbol')
+  final.rna <- log2(final.rna + 0.001) %>%
+    tibble::rownames_to_column(var = 'hugo_symbol')
+  
+  dbWriteTable(con,"gse136961_expr",final.rna,overwrite = T,row.names = F)
+}
+# NSCLC GSE135222 ICI----
+# 27例RNAseq，60例WES，甲基化数据队列： GSE119144，未提取
+{
+  # RNA-seq for a total of 27 advanced non-small cell lung carcinoma patients who were treated with anti-PD-1/PD-L1
+  library(clusterProfiler)
+  library(org.Hs.eg.db)
+  library(pdftools)
+  
+  # 从文献附件Table3读取免疫治疗响应数据
+  {
+    # 提取之后保存到csv，后期读取csv数据
+    pdf.file <- pdf_text('../../../../../Biodatas/GEO/lung/Jung.et.al.2019/GSE135222_Paper_supplment_file.pdf')
+    # 从第20-36页
+    tmp = unlist(lapply(12:12, function(i){
+      trimws(strsplit(pdf.file[[i]],split = '\n')[[1]])
+    }))
+    # 剔除非数据行
+    tmp=tmp[-c(1,2,3)]
+    
+    library(stringr)
+    tmp.tbl = do.call(as.data.frame(rbind),lapply(tmp[-1], function(x){
+      # x = tmp[2]
+      xl <- unlist(str_split(x,'[\\s]+'))
+      
+      df <- t(data.frame(xl))
+      
+      # sample_id <- x[1]
+      # tmb <- x[2]
+      # methylation <- x[3]
+      # aneuploidy <- x[4]
+      # times <- x[5]
+      # status <- x[6]
+      # response <- x[7]
+      return(df)
+    }))
+    colnames(tmp.tbl) <- c('sample_id','tmb','methylation','aneuploidy','pfs_months','pfs_status','response')
+    
+    tmp.tbl$sample_id <- paste0("pts",tmp.tbl$sample_id)
+    tmp.tbl <- tmp.tbl %>%
+      dplyr::mutate(tmb = as.numeric(tmb),
+                    methylation = as.numeric(methylation),
+                    aneuploidy = as.numeric(aneuploidy),
+                    pfs_months = as.numeric(pfs_months),
+                    pfs_status = as.numeric(pfs_status),
+                    response = case_when(response %in% c('DCB') ~ 'DCB',
+                                         response %in% c('NDB') ~ 'NCB',
+                                         TRUE ~ ''))
+    write.csv(tmp.tbl,file = "../../../../../Biodatas/GEO/lung/Jung.et.al.2019/GSE135222.Clinical.of.60pts.from_supplment_file.csv",row.names = F)
+  }
+  load("../../../../../Biodatas/GEO/lung/Jung.et.al.2019/GSE135222.RData")
+  # The RNA-seq reads were aligned to the human reference genome (hg19) with STAR67 and gene expression values were quantified using RSEM
+  # Supplementary_files_format_and_content: gene expression matrix (tab-delimited text file; TPM unit)
+  rna.raw <- data.table::fread("../../../../../Biodatas/GEO/lung/Jung.et.al.2019/GSE135222_GEO_RNA-seq_omicslab_exp.tsv.gz")
+  
+  colnames(pheno)
+  final.cli <- pheno %>%
+    dplyr::select(title,
+                  age,
+                  sex = gender,
+                  pfs_months = pfs.time,
+                  pfs_status = progression.free.survival..pfs.) %>%
+    tidyr::separate(title,into = c('cancer','sample_id'),remove = F) %>%
+    dplyr::mutate(patient_id = gsub(" ","",title),
+                  sample_id = paste0("pts",sample_id),
+                  sex = ifelse(sex == 'female','Female','Male'),
+                  pfs_months = as.numeric(pfs_months)/30) %>%
+    dplyr::full_join(dplyr::select(tmp.tbl,sample_id,tmb,response,methylation,aneuploidy),by='sample_id') %>%
+    dplyr::mutate(cancer = 'NSCLC',
+                  sample_type = 'T',
+                  cancer_detail = 'NSCLC',
+                  treatment = 'anti-PD-1/PD-L1',
+                  ici_treatment = 'Yes',
+                  seq_type = 'WES')%>%
+    dplyr::select(patient_id,sample_id,
+                  sample_type,
+                  age,sex,
+                  cancer,cancer_detail,
+                  tmb,aneuploidy,methylation,
+                  pfs_months,pfs_status,
+                  treatment,ici_treatment,response,
+                  seq_type)
+  
+  dbWriteTable(con,"gse135222_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("pfs_status"='double'))
+  sql.upd <- paste0("ALTER TABLE gse135222_clinical MODIFY COLUMN pfs_status DOUBLE NULL;")
+  dbSendStatement(con,sql.upd)
+  
+  # 从附件中获取基因突变数据
+  {
+    raw.snv <- openxlsx::read.xlsx("../../../../../Biodatas/GEO/lung/Jung.et.al.2019/41467_2019_12159_MOESM8_ESM.xlsx",sheet = 1,startRow = 3)
+    
+    clc.snv <- raw.snv %>%
+      tidyr::separate(Gene,into = c('symbolraw','other'),sep = "[:]",remove = F) %>%
+      tidyr::separate(symbolraw,into = c("Symbol",'other'),sep = "[(]") %>%
+      dplyr::select(-other) %>%
+      dplyr::mutate(Function = ifelse(Function == 'frameshift deletion','frameshift',
+                                      ifelse(Function == 'nonsynonymous SNV','nonsynonymousSNV',Function)))
+    
+    table(clc.snv$Function)
+    length(unique(clc.snv$Sample.ID))
+    # write.csv(clc.snv,file = "/GSE135222.Mutation.of.60pts.csv",row.names = F,col.names = T)
+    
+    # build maf file
+    colnames(clc.snv)
+    final.dna <- clc.snv %>%
+      dplyr::mutate(Variant_Type = ifelse(Function %in% c("nonsynonymousSNV","splicing","stopgain","stoploss"),"SNP","Indel")) %>%
+      dplyr::select(Hugo_Symbol = Symbol,
+                    Chromosome,
+                    Start_Position = Start,
+                    End_Position = End,
+                    Reference_Allele = Ref,
+                    Tumor_Seq_Allele2 = Alt,
+                    Variant_Classification = Function,
+                    Variant_Type,
+                    sample_id = Sample.ID) %>%
+      dplyr::mutate(sample_id = paste0("pts",sample_id))
+    colnames(final.dna) <- tolower(colnames(final.dna))
+    length(unique(final.dna$sample_id))
+    
+    dbWriteTable(con,"gse135222_mutation",final.dna,overwrite = T,row.names = F)
+    # write.table(gse135222.maf,file = "../data/GSE135222.Mutation.of.60pts.maf",row.names = F,col.names = T,sep = "\t",quote = F)
+    
+    }
+  
+  clc.ids <- bitr(substr(rna.raw$gene_id,1,15),fromType = "ENSEMBL",toType = "SYMBOL",OrgDb = org.Hs.eg.db)
+  final.rna <- rna.raw %>%
+    dplyr::mutate(ENSEMBL = substr(gene_id,1,15)) %>%
+    dplyr::inner_join(clc.ids,.) %>%
+    dplyr::select(-gene_id,-ENSEMBL) %>%
+    extract.max('SYMBOL') %>%
+    dplyr::filter(!is.na(Symbol),Symbol != '') %>%
+    tibble::column_to_rownames(var = 'Symbol') 
+  # 更换样本名
+  final.rna <- final.rna %>%
+    t() %>% as.data.frame() %>%
+    tibble::rownames_to_column(var = 'patient_id') %>%
+    dplyr::inner_join(dplyr::select(final.cli,patient_id,sample_id),by='patient_id') %>%
+    dplyr::select(-patient_id) %>%
+    tibble::column_to_rownames(var = 'sample_id') %>%
+    t() %>% as.data.frame()
+    
+    # dplyr::rename(hugo_symbol = Symbol)
+  
+  # 新增系统处理
+  final.rna <- log2(final.rna + 0.001) %>%
+    tibble::rownames_to_column(var = 'hugo_symbol')
+  
+  dbWriteTable(con,"gse135222_expr",final.rna,overwrite = T,row.names = F)
+  
+}
+# CRPC,RNAseq，18例Ipi单抗
+# ref: Neoantigen responses, immune correlates, and favorable outcomes after ipilimumab treatment of patients with prostate cancer
+{
+  raw.clin <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/H.CRPC.RNAseq/aaz3577_data_file_s1.xlsx",sheet = 1,startRow = 2,detectDates = T)
+  raw.pts <- data.table::fread("../../../../../Biodatas/ICIcohorts/H.CRPC.RNAseq/18pts.tmb.orr.info.frompaper.txt")
+  
+  raw.rna <- openxlsx::read.xlsx("../../../../../Biodatas/ICIcohorts/H.CRPC.RNAseq/aaz3577_data_file_s1.xlsx",sheet = 2,startRow = 5)
+  
+  clc.cli <- raw.clin %>%
+    dplyr::mutate(sample_id = paste0("pts",`Pt.#`)) %>%
+    dplyr::mutate(os = as.numeric(difftime(`Date.of.Last.Known.Alive/Death`,`Start.Date`,units = 'days'))) %>%
+    dplyr::mutate(rpfs = as.numeric(difftime(`Date.of.Radiographic.Progression`,`Start.Date`,units = 'days'))) %>%
+    dplyr::mutate(cpfs = as.numeric(difftime(`Date.of.Clinical.Progression`,`Start.Date`,units = 'days'))) %>%
+    dplyr::mutate(psapfs_status = `PSA.Progression.(Yes/No)`) %>%
+    dplyr::mutate(patient_id = sample_id,
+                  psapfs_status = ifelse(psapfs_status == 'Yes',1,
+                                         ifelse(psapfs_status == 'No',0,NA)),
+                  rpfs = rpfs/30,
+                  cpfs = cpfs/30,
+                  os = os/30,
+                  cancer = 'PRAD',
+                  cancer_detail = 'CRPC',
+                  ici_treatment = 'Yes',
+                  treatment = 'Ipilimumab',
+                  treatment_drug_type = 'Anti-CTLA-4',
+                  seq_type = 'RNAseq') %>%
+    dplyr::left_join(dplyr::mutate(raw.pts,sample_id = paste0('pts',sample_id)),by='sample_id') %>%
+    dplyr::select(patient_id,sample_id,cancer,cancer_detail,
+                  tmb,orr,
+                  ici_treatment,treatment_drug_type,treatment,
+                  rpfs_status = rPD,rpfs_months = rpfs,
+                  cpfs_status = cPD,cpfs_months = cpfs,
+                  psapfs_status,psapfs_months,
+                  os_status = Death,os_months = os,
+                  seq_type) 
+  final.cli <- clc.cli
+  dbWriteTable(con,"subudhi_2020_clinical",final.cli,overwrite = T,row.names = F,
+               fields =c("rpfs_status"='double',"cpfs_status"='double',"os_status"='double'))
+  
+  clc.rna <- raw.rna %>%
+    tibble::column_to_rownames(var = 'X1') 
+  colnames(clc.rna) <- paste0('pts',colnames(clc.rna))
+  
+  clc.clin <- clc.cli %>%
+    dplyr::filter(sample_id %in% colnames(clc.rna))
+  # all(colnames(clc.rna) %in% clc.clin$sample_id)
+  # all(colnames(clc.rna) == clc.clin$sample_id)
+  
+  ## Create DESeq2Dataset object,标准化后的数据不用于DESeq2做差异表达或者其他任何基于negative binomial model的工具
+  dds <- DESeqDataSetFromMatrix(countData = clc.rna, colData = clc.clin, design = ~ 1)
+  dds <- estimateSizeFactors(dds)
+  clc.rna <- counts(dds, normalized=TRUE)
+  
+  clc.rna.scale <- t(scale(t(clc.rna)))
+  final.rna <- clc.rna.scale %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = 'hugo_symbol') %>%
+    dplyr::filter(!grepl("^\\d+$",hugo_symbol))
+  dbWriteTable(con,"subudhi_2020_expr",final.rna,overwrite = T,row.names = F)
+  
+  
+}
+
+
+#断开连接
+dbDisconnect(con)
+
+
+
