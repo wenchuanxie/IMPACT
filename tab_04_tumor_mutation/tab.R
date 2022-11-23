@@ -58,6 +58,35 @@ sidebar <- sidebarPanel(
                                                  maxItems = 10,
                                                  placeholder = "No more than 10 genes.",
                                                  plugins = list('remove_button', 'drag_drop'))),
+                   conditionalPanel("input.tumormutation_data_type == 'Mutation'" ,
+                                    awesomeRadio(
+                                      inputId = "tumormutation_logical",
+                                      label = "Mutations in all(AND)/any(OR) quried genes",
+                                      inline = T,
+                                      choices = c("AND" ,"OR"),
+                                      selected = "AND",
+                                      status = "success",
+                                      checkbox = TRUE
+                                    )),
+                   # 队列数据的基因表达阈值
+                   conditionalPanel("input.tumormutation_data_type == 'Expr' || input.tumormutation_data_type == 'Proteome'",
+                                    fluidRow(
+                                      column(6,numericInput(inputId = "tumormutation_exprcut1_id",
+                                                            label = tags$span(
+                                                              add_prompt(tags$span(icon(name = "circle-question")),
+                                                                         message = "Percentile threshold for RNA data", 
+                                                                         position = "right"),
+                                                              "Percentile cutoff (%,High):"),
+                                                            value = 50,
+                                                            min = 0,
+                                                            max = 100,step = NA,width = '100%')),
+                                      column(5,numericInput(inputId = "tumormutation_exprcut2_id",
+                                                            label = "",
+                                                            value = 50,
+                                                            min = 0,
+                                                            max = 100,step = NA,width = '100%'))
+                                    )
+                   ),
                    selectizeInput(inputId = "tumormutation_display_symbol_id", 
                                   label = "Enter displayed gene symbols, E.g. 'TP53 KEAP1 NFE2L2'", 
                                   choices = NULL, 
@@ -70,7 +99,7 @@ sidebar <- sidebarPanel(
                    # 队列数据的基因突变类型
                    pickerInput(inputId = "tumormutation_vartype_id",
                                label = tags$span(
-                                 add_prompt(tags$span(icon(name = "question-circle")),
+                                 add_prompt(tags$span(icon(name = "circle-question")),
                                             message = "Variant Classification for Mutation data", 
                                             position = "right"),
                                  "Select gene mutation types"),
@@ -79,30 +108,17 @@ sidebar <- sidebarPanel(
                                selected = NULL)
                    
   ),
-  # 队列数据的基因表达阈值
-  conditionalPanel("input.tumormutation_data_type == 'Expr' || input.tumormutation_data_type == 'Proteome'",
-                   fluidRow(
-                     column(6,numericInput(inputId = "tumormutation_exprcut1_id",
-                                           label = tags$span(
-                                             add_prompt(tags$span(icon(name = "question-circle")),
-                                                        message = "Percentile threshold for RNA data", 
-                                                        position = "right"),
-                                             "Percentile cutoff (%,High):"),
-                                           value = 50,
-                                           min = 0,
-                                           max = 100,step = NA,width = '100%')),
-                     column(5,numericInput(inputId = "tumormutation_exprcut2_id",
-                                           label = "",
-                                           value = 50,
-                                           min = 0,
-                                           max = 100,step = NA,width = '100%'))
-                   )
-  ),
+  # 是否排出高频突变基因
+  checkboxInput("exflags", 
+                # "Exclude known frequently mutated genes (FLAGs)?",
+                HTML("Exclude known frequently mutated genes", 
+                     as.character(actionLink(inputId = 'show_flags', label = '(FLAGs)'))),
+                TRUE),
   # 分组颜色
   fluidRow(
     column(6,colourpicker::colourInput(inputId = "tumormutation_colorg1_id", 
                                        label = tags$span(
-                                         add_prompt(tags$span(icon(name = "question-circle")),
+                                         add_prompt(tags$span(icon(name = "circle-question")),
                                                     message = "Color for High/Mut group", 
                                                     position = "right"),
                                          'Color 1'), 
@@ -113,8 +129,8 @@ sidebar <- sidebarPanel(
                                        returnName = TRUE)),
     column(5,colourpicker::colourInput(inputId = "tumormutation_colorg2_id", 
                                        label = tags$span(
-                                         add_prompt(tags$span(icon(name = "question-circle")),
-                                                    message = "Color for Low/Wt group", 
+                                         add_prompt(tags$span(icon(name = "circle-question")),
+                                                    message = "Color for Low/WT group", 
                                                     position = "right"),
                                          'Color 2'),  
                                        value = "#2196F3", 
@@ -122,11 +138,28 @@ sidebar <- sidebarPanel(
                                        palette = c("square", "limited"), 
                                        allowTransparent = FALSE, 
                                        returnName = TRUE))),
-  # 提交按钮
-  actionButton(inputId = "tumormutation_goButton",
-               label = "Submit",
-               class ="btn-primary")
   
+  # actionLink("flags_list","Detail info of FLAGs genes"),
+  bsModal(#"flags_info_popup","FLAGs filter","showdemo",
+          id = "flags_info_popup", title = "FLAGs Gene List", trigger = "show_flags",
+          includeMarkdown("tab_08_user_defined/flags.md"),
+          size="large"),
+  br(),
+  # 提交按钮
+  # actionButton(inputId = "tumormutation_goButton",
+  #              label = "Submit",
+  #              class ="btn-primary")
+  fluidRow(
+    column(2, 
+           div(style="display:inline-block",actionButton(inputId = "tumormutation_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
+    ),
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_tumormutation", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
+  )
 )
 
 mainpage <- mainPanel(
@@ -142,6 +175,13 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
   
   # 定义变量存储输出对象
   output.graphic <- reactiveValues()
+  
+  observeEvent(input[['reset_input_tumormutation']], {
+    shinyjs::reset("tumormutation_sidebar")
+  })
+  observeEvent(input$reset_input_tumormutation, {
+    output[['tumormutation_maintabs']] <- NULL
+  })
   
   # 0.根据队列类型（ICI或非ICI队列）从数据库获取肿瘤名称名称
   tumor.names.df <- eventReactive(input$tumormutation_study_type,{
@@ -309,6 +349,11 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
   #                      min = 0, max = 100, step = NA)
   # })  
   
+  observe({
+    shinyjs::toggleState("tumormutation_goButton", 
+                         !is.null(input$tumormutation_symbol_id) && input$tumormutation_symbol_id != "" )
+  })
+  
   # 从DB获取数据
   # 临床信息
   db.dat.cli <- eventReactive(input$tumormutation_study_id,{
@@ -374,6 +419,16 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
   #   return(type.df)
   # })
   
+  # 输入为空验证
+  iv_tumormutation <- InputValidator$new()
+  iv_tumormutation$add_rule("tumormutation_symbol_id", sv_required())
+  iv_tumormutation$add_rule("tumormutation_vartype_id", sv_required())
+  iv_tumormutation$add_rule("tumormutation_exprcut1_id", sv_gt(9))
+  iv_tumormutation$add_rule("tumormutation_exprcut1_id", sv_lt(91))
+  iv_tumormutation$add_rule("tumormutation_exprcut2_id", sv_gt(9))
+  iv_tumormutation$add_rule("tumormutation_exprcut2_id", sv_lt(91))
+  iv_tumormutation$enable()
+  
   # 业务层
   observeEvent(input$tumormutation_goButton,{
     cat("===================== Server Tumor Mutation =======================\n")
@@ -383,7 +438,7 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
       trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting ploting..."
+      text = "Starting mutation analysis ..."
     )
     # 获取参数
     selected_study_id = input$tumormutation_study_id
@@ -413,15 +468,18 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
     cat(cat_prefix_mut,"-选择的样本分组1颜色: ", colorg1, "\n")
     cat(cat_prefix_mut,"-选择的样本分组2颜色: ", colorg2, "\n")
     
+    tumormutation_logical_type <- input$tumormutation_logical
+    cat(cat_prefix_mut,"-选择的多基因突变逻辑关系: ", tumormutation_logical_type, "\n")
+    
     # 数据清理、绘图、输出
     input.genes <- symbol 
     if(data_type == 'Mutation'){
-      # input.genes <- c(input.genes,"Combined")
+      # input.genes <- c(input.genes,"All Queried Genes")
       if(length(input.genes) >1){
-        input.genes <- c(input.genes,"Combined")
+        input.genes <- c(input.genes,"All Queried Genes")
       }
     }
-    input.vartype <- vartype
+    input.vartype.tumormutation <- vartype
     input.exprcut1 <- exprcut1/100  #转化为分位数函数的输入值
     input.exprcut2 <- exprcut2/100
     # input.color <- c(colorg1,colorg2)
@@ -443,17 +501,53 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
         
         gname <- input.genes[i]
         symbol.name <- gname
-        if(gname == 'Combined') {symbol.name <- input.genes} # EGFR#TP53#ALK
+        if(gname == 'All Queried Genes') {symbol.name <- setdiff(input.genes,gname)} # EGFR#TP53#ALK
         cat("current gene: ",symbol.name,"\n")
         
         # 构建分组信息
         if(data_type == 'Mutation'){
-          grp1.df <- db.dat() %>%
-            dplyr::filter(hugo_symbol %in% symbol.name,
-                          variant_classification %in% input.vartype) %>%
-            dplyr::select(sample_id,hugo_symbol)
+          if(gname == 'All Queried Genes'){
+            # 多个基因时
+            if(tumormutation_logical_type == 'AND'){
+              # logical 为 AND 时
+              
+              cat(cat_prefix_mut,"- 逻辑与选择多基因突变模式！\n")
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype.tumormutation) %>%
+                dplyr::select(sample_id,hugo_symbol) %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count == length(symbol.name)) # 取
+            }
+            if(tumormutation_logical_type == 'OR'){
+              # logical 为 OR 时
+              cat(cat_prefix_mut,"- 逻辑或选择多基因突变模式！\n")
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype.tumormutation) %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count >= 1) # 取
+            }
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype.tumormutation) %>%
+              dplyr::filter(sample_id %in% tmp.mut.samples$sample_id) %>%
+              dplyr::select(sample_id,hugo_symbol)
+          }else{
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype.tumormutation) %>%
+              dplyr::select(sample_id,hugo_symbol)
+          }
+          
           clc.cli <- db.dat.cli() %>%
-            dplyr::mutate(group = ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','Wt')) %>%
+            dplyr::mutate(group = ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','WT')) %>%
             dplyr::select(sample_id,group)
           
         }
@@ -504,7 +598,7 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
             downloadButton(paste0(gname, "_dl_plot_mut"), 
                            tags$span(
                              "DLGraph",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save plot in a PDF file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
@@ -512,7 +606,7 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
             downloadButton(paste0(gname, "_dl_tbl_mut"), 
                            tags$span(
                              "DLTable",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save data of heatmap plot in a txt file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
@@ -529,13 +623,15 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
           comm.samples <- intersect(db.dat.mut()$sample_id,clc.cli$sample_id)
           grp.df <- clc.cli %>%
             dplyr::filter(sample_id %in% comm.samples) %>%
-            # dplyr::filter(group %in% c('High','Low','Mut','Wt')) %>%
+            # dplyr::filter(group %in% c('High','Low','Mut','WT')) %>%
             dplyr::arrange(group) 
           mut.df <- db.dat.mut() %>%
             dplyr::filter(sample_id %in% grp.df$sample_id) %>%
             # 分析指定的突变类型的数据
-            dplyr::filter(variant_classification %in% input.vartype)
+            dplyr::filter(variant_classification %in% input.vartype.tumormutation)
         }
+        
+        flag_genes <- c("TTN","MUC16","OBSCN","AHNAK2","SYNE1","FLG","MUC5B","DNAH17","PLEC","DST","SYNE2","NEB","HSPG2","LAMA5","AHNAK","HMCN1","USH2A","DNAH11","MACF1","MUC17","DNAH5","GPR98","FAT1","PKD1","MDN1","RNF213","RYR1","DNAH2","DNAH3","DNAH8","DNAH1","DNAH9","ABCA13","SRRM2","CUBN","SPTBN5","PKHD1","LRP2","FBN3","CDH23","DNAH10","FAT4","RYR3","PKHD1L1","FAT2","CSMD1","PCNT","COL6A3","FRAS1","FCGBP","RYR2","HYDIN","XIRP2","LAMA1")
         # 提取高频突变的基因Top20
         if(symbol_dis == '' || is.null(symbol_dis)){
           freq.df <- mut.df %>%
@@ -547,6 +643,12 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
             dplyr::filter(hugo_symbol != 'Unknown') %>%
             dplyr::mutate(pct = freq/length(unique(mut.df$sample_id)) * 100 ) %>%
             dplyr::arrange(desc(freq),desc(pct))
+          # 过滤FLAGs
+          if (input$exflags) {
+            freq.df <- freq.df %>%
+              dplyr::filter(!hugo_symbol %in% flag_genes)
+          }
+          
           # 选则高频图片的前20个基因作为展示
           if(nrow(freq.df) >= 20){
             gene.dis <- freq.df$hugo_symbol[1:20]
@@ -556,6 +658,10 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
         }else{
           # 否则用客户前端输入的
           gene.dis <- symbol_dis
+          # 过滤FLAGs
+          if (input$exflags) {
+            gene.dis <- setdiff(gene.dis,flag_genes)
+          }
         }
         # 宽数据转换
         {
@@ -598,6 +704,7 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
           calc.exp <- chi.df %>%
             dplyr::filter(!is.na(group))
           calc.exp[is.na(calc.exp)] <- 0
+          # browser()
           calc.out <- do.call(rbind,lapply(colnames(calc.exp)[-(1:2)], func.bacthchitest,calc.exp))
           # 修改基因的名称格式为，与plot.mat同样的行顺序
           calc.str <- calc.out[match(rownames(plot.mat),calc.out$characterestics),] %>%
@@ -645,24 +752,23 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
         complexheatmap <- function(){
           
           if(data_type == 'Mutation'){
-            col.list <- list(group = c('Mut'= colorg1,'Wt' = colorg2))
+            col.list <- list(group = c('Mut'= colorg1,'WT' = colorg2))
           }else{
             col.list <- list(group = c('High'= colorg1,'Low' = colorg2))
           }
           
           # left heatmap(突变组/High组)
-          {
-            # browser()
-            onco.cli.left <- grp.df %>%
-              dplyr::filter(group %in% c('Mut','High'))
+          onco.cli.left <- grp.df %>%
+            dplyr::filter(group %in% c('Mut','High'))
+          right_ano <- rowAnnotation(rbar = anno_oncoprint_barplot())
+          if(nrow(onco.cli.left) > 1){
             ha.l = HeatmapAnnotation(group = factor(onco.cli.left$group),
                                      col = col.list,
                                      show_legend = c(T), # 左侧图top 注释不显示图例
                                      show_annotation_name = F,simple_anno_size_adjust = T,
                                      annotation_legend_param = list(group = list(title = "Group",
                                                                                  direction = "horizontal",
-                                                                                 nrow = 2))
-            )
+                                                                                 nrow = 2)))
             # 只有一个样本时，报：Error in : Incorrect type of 'mat'
             p.hl <- oncoPrint(as.matrix(plot.mat[,onco.cli.left$sample_id]),
                               alter_fun_is_vectorized = FALSE,
@@ -687,30 +793,34 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
                               show_column_names = F,
                               heatmap_legend_param = heatmap_legend_param)
             
+            
+            right_ano <- rowAnnotation(Chitest = anno_text(calc.str$p.res.str,
+                                                           location = 1,
+                                                           rot = 0,
+                                                           just = "right",
+                                                           # show_name = TRUE,
+                                                           gp = gpar(fontsize = 10)),
+                                       annotation_name_side = 'top')
+            
           }
+          
           # right heatmap(WT组/LOW组)
-          {
-            onco.cli.right <- grp.df %>%
-              dplyr::filter(group %in% c('Wt','Low'))
+          onco.cli.right <- grp.df %>%
+            dplyr::filter(group %in% c('WT','Low'))
+          if(nrow(onco.cli.right) > 1){
+            
             ha.r = HeatmapAnnotation(group = factor(onco.cli.right$group),
                                      col = col.list,
                                      show_legend = c(T), # 左侧图top 注释不显示图例
                                      show_annotation_name = F,simple_anno_size_adjust = T, 
                                      annotation_legend_param = list(group = list(title = "Group",
                                                                                  direction = "horizontal",
-                                                                                 nrow = 2))
-            )
+                                                                                 nrow = 2)))
             p.hr <- oncoPrint(as.matrix(plot.mat[,onco.cli.right$sample_id]),
                               alter_fun_is_vectorized = FALSE,
                               # get_type = function(x) gsub(":.*$", "", strsplit(x, ";")[[1]]), # 两个取一个
                               top_annotation = ha.r,
-                              right_annotation = rowAnnotation(Chitest = anno_text(calc.str$p.res.str,
-                                                                                   location = 1,
-                                                                                   rot = 0,
-                                                                                   just = "right",
-                                                                                   # show_name = TRUE,
-                                                                                   gp = gpar(fontsize = 10)),
-                                                               annotation_name_side = 'top'),
+                              right_annotation = right_ano,
                               
                               # 右侧加秩和检验P值
                               alter_fun = alter_fun, 
@@ -732,10 +842,18 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
                               heatmap_legend_param = heatmap_legend_param)
             
           }
-          draw(p.hl + p.hr,
-               merge_legend = TRUE,
-               heatmap_legend_side = "bottom",
-               annotation_legend_side = "bottom")
+          if(nrow(onco.cli.left) > 1){
+            draw(p.hl + p.hr,
+                 merge_legend = TRUE,
+                 heatmap_legend_side = "bottom",
+                 annotation_legend_side = "bottom")
+          }else{
+            draw(p.hr,
+                 merge_legend = TRUE,
+                 heatmap_legend_side = "bottom",
+                 annotation_legend_side = "bottom")
+          }
+          # return(p.out)
         }
         
         update_modal_progress(
@@ -760,9 +878,9 @@ tab_04_tumor_mutation$server <- function(input, output,session) {
                         Variant_Classification != '') %>%
           dplyr::select(Sample_ID = sample_id,Hugo_Symbol,Variant_Classification,Group = group)
         
-        out.mat[1:5,]
+        # out.mat[1:5,]
         
-        output.graphic[[paste0(gname)]]$tbl <- out.mat
+        output.graphic[[paste0(gname)]]$tbl  <- out.mat
         
         output.graphic[[paste0(gname)]]$plot <- complexheatmap()
         

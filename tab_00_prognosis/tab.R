@@ -22,77 +22,29 @@ source("./r/func.ggboxplot.R")
                   grepl("Mutation",data_type))
   # 肿瘤名称
   prog.tumor.detail <- unique(nonicicohort.df$tumor_detail)
-  cat("非ICI队列涵盖的具有突变数据的瘤种: ",prog.tumor.detail,"\n")
-}
-
-tab_00_prognosis <- list()
-cat_prefix_prog <- 'Prognostic'
-sidebar <- sidebarPanel(
-  id = 'prognostic_sidebar',
-  width = 3,
-  h3("Cancer Prognostic Biomarkers Exploration"),
-  pickerInput(inputId = "prognostic_cancer_id",
-              label = "Select one cancer type, E.g. 'LUAD'",
-              choices = NULL,
-              multiple = FALSE,
-              selected = NULL),
-  selectizeInput(inputId = "prognostic_symbol_id", 
-                 label = "Select/Input gene symbols, E.g. 'EGFR STK11'", 
-                 choices = NULL, 
-                 width = '100%',
-                 multiple = T, 
-                 options = list(delimiter = " ", create = T,maxItems = 10,
-                                placeholder = "No more than 10 genes.",
-                                plugins = list('remove_button', 'drag_drop'))),
-  # 提交按钮
-  actionButton(inputId = "prognostic_goButton",
-               label = "Submit",
-               class ="btn-primary"
-  )
-)
-
-mainpage <- mainPanel(
-  id = 'prognostic_mainpage',
-  width = 9,
-  uiOutput(outputId='prognostic_maintabs')
-)
-
-tab_00_prognosis$ui <- sidebarLayout(sidebar, mainpage)
-
-tab_00_prognosis$server <- function(input, output,session) {
-  cat("========================= Start Prognosis=============================\n")
-  # 定义变量存储输出对象
-  middle.prog.graphic <- reactiveValues()
-  output.prog.graphic <- reactiveValues()
-  # 将获取到的肿瘤名称更新到页面
-  observe({
-    updatePickerInput(session = session, 
-                      inputId = "prognostic_cancer_id",
-                      choices = c(prog.tumor.detail), 
-                      selected = NULL)
-  })
+  # cat("非ICI队列涵盖的具有突变数据的瘤种: ",prog.tumor.detail,"\n")
   
-  # 根据选择的瘤种，确定突变队列，选择所有队列的基因的交集
-  nonici.data.list <- eventReactive(input$prognostic_cancer_id,{
-    
-    # 页面缓冲显示
-    show_modal_spinner(spin = "orbit",color = "#6bba8b",text = "Loading data...")
-    
+  prog.cohort.list <- list()
+  length(prog.cohort.list) <- length(prog.tumor.detail)
+  names(prog.cohort.list) <- prog.tumor.detail
+  for (t in seq(1,length(prog.tumor.detail))) {
+    # t = 1
+    tumor <- prog.tumor.detail[t]
     # 初始化输出list
+    prog.cohort.list[[t]] <- list()
     output.list <- list()
     length(output.list) <- 3
     names(output.list)[[1]] <- 'clinical'
     names(output.list)[[2]] <- 'mutation'
-    names(output.list)[[3]] <- 'symbols'
+    
     output.list[[1]] <- list()
     output.list[[2]] <- list()
     output.list[[3]] <- c()
-
+    
     # 确定队列list
-    select_tumor <- input$prognostic_cancer_id
-    cat(cat_prefix_prog,"-选择的瘤种是:",select_tumor,"\n")
-    nonici.study.df <- nonicicohort.df %>%
-      dplyr::filter(tumor_detail == select_tumor) %>%
+    # select_tumor <- input$prognostic_cancer_id
+    # cat(cat_prefix_prog,"-选择的瘤种是:",select_tumor,"\n")
+    nonici.study.df <- nonicicohort.df[which(nonicicohort.df$tumor_detail == tumor),] %>%
       dplyr::distinct(study_id,.keep_all = T)
     
     # 将上述队列的突变和临床数据加载到缓存
@@ -102,13 +54,14 @@ tab_00_prognosis$server <- function(input, output,session) {
     length(nonici.cli.list) <- nrow(nonici.study.df)
     
     for (i in seq(1,length(unique(nonici.study.df$study_id)))) {
+      
       sid <-  unique(nonici.study.df$study_id)[i]
       
       tmp.df <- nonici.study.df %>%
         dplyr::filter(study_id == sid)
       # tmp.df是一个行数>=1的数据框
       if(grepl("Mutation",tmp.df$data_type[1])){
-
+        
         names(nonici.cli.list)[[i]] = sid
         nonici.cli.list[[i]] <- data.frame()
         
@@ -151,17 +104,151 @@ tab_00_prognosis$server <- function(input, output,session) {
     nonici.symbols <- unique(nonici.symbols.df$hugo_symbol)
     
     output.list[[3]] <- nonici.symbols
+    names(output.list)[[3]] <- 'symbols'
     
+    # remove_modal_spinner()  # 搜索结束后消除缓冲显示
+    # return(output.list)
+    prog.cohort.list[[t]] <- output.list
+    
+    cat("预后分析，瘤种 ",tumor," 的分析数据加载完成!\n")
+  }
+  cat("泛队列预后分析数据加载完成!\n")
+  
+}
+
+tab_00_prognosis <- list()
+cat_prefix_prog <- 'Prognostic'
+sidebar <- sidebarPanel(
+  id = 'prognostic_sidebar',
+  width = 3,
+  h3("Cancer Prognostic Biomarkers Exploration"),
+  pickerInput(inputId = "prognostic_cancer_id",
+              label = "Select one cancer type, E.g. 'LUAD'",
+              choices = NULL,
+              multiple = FALSE,
+              selected = NULL),
+  selectizeInput(inputId = "prognostic_preset_id", 
+                 label = "Pre-defined gene set or user-defined list:",
+                 choices = NULL, 
+                 width = '100%',
+                 selected = NULL,
+                 multiple = F),
+  selectizeInput(inputId = "prognostic_symbol_id", 
+                 label = "Select/Input gene symbols, E.g. 'EGFR STK11'", 
+                 choices = NULL, 
+                 width = '100%',
+                 multiple = T, 
+                 options = list(delimiter = " ", create = T,maxItems = 10,
+                                placeholder = "No more than 10 genes.",
+                                plugins = list('remove_button', 'drag_drop'))),
+  awesomeRadio(
+    inputId = "prognostic_logical",
+    label = "Mutations in all(AND)/any(OR) quried genes",
+    inline = T,
+    choices = c("AND" ,"OR"),
+    selected = "AND",
+    status = "success",
+    checkbox = TRUE
+  ),
+  # 提交按钮
+  useShinyjs(),
+  # actionButton(inputId = "prognostic_goButton",
+  #              label = "Submit",
+  #              class ="btn-primary")
+  fluidRow(
+    column(2, 
+           div(style="display:inline-block",actionButton(inputId = "prognostic_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
+    ),
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_prog", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
+  )
+)
+
+mainpage <- mainPanel(
+  id = 'prognostic_mainpage',
+  width = 9,
+  uiOutput(outputId='prognostic_maintabs')
+)
+
+tab_00_prognosis$ui <- sidebarLayout(sidebar, mainpage)
+
+tab_00_prognosis$server <- function(input, output,session) {
+  cat("========================= Start Prognosis=============================\n")
+  # 定义变量存储输出对象
+  middle.prog.graphic <- reactiveValues()
+  output.prog.graphic <- reactiveValues()
+  
+  observeEvent(input$reset_input_prog, {
+    shinyjs::reset("prognostic_sidebar")
+  })
+  observeEvent(input$reset_input_prog, {
+    output$prognostic_maintabs <- NULL
+  })
+  
+  # 将获取到的肿瘤名称更新到页面
+  observe({
+    updatePickerInput(session = session, 
+                      inputId = "prognostic_cancer_id",
+                      choices = c(prog.tumor.detail), 
+                      selected = NULL)
+  })
+  
+  # 基因集定义：自选或者已有基因集合
+  prog.geneset.list <- eventReactive(input$prognostic_cancer_id,{
+    # 页面缓冲显示
+    show_modal_spinner(spin = "orbit",color = "#6bba8b",text = "Loading data...")
+    output.list <- c("User-defined List",names(pre_genesets_list))
     remove_modal_spinner()  # 搜索结束后消除缓冲显示
+    return(output.list)
+  })
+  observe({
+    # 更新基因集
+    updateSelectizeInput(session = session, 
+                         inputId = "prognostic_preset_id", 
+                         choices = c(prog.geneset.list()), 
+                         selected = "User-defined List", 
+                         server   = TRUE)
+  })
+  
+  # 根据选择的瘤种，确定突变队列，选择所有队列的基因的交集
+  nonici.data.list <- eventReactive(input$prognostic_cancer_id,{
+    # 页面缓冲显示
+    show_modal_spinner(spin = "orbit",color = "#6bba8b",text = "Loading data...")
+    select_tumor <- input$prognostic_cancer_id
+    cat(cat_prefix_prog,"-选择的瘤种是:",select_tumor,"\n")
+    output.list <- prog.cohort.list[select_tumor][[1]]
+    remove_modal_spinner()  # 搜索结束后消除缓冲显示
+    return(output.list)
+  })
+  
+  prog.gene.list <- eventReactive(input$prognostic_preset_id,{
+    # 页面缓冲显示
+    # show_modal_spinner(spin = "orbit",color = "#6bba8b",text = "Loading data...")
+    selected_set_name <- input$prognostic_preset_id       
+    if(selected_set_name != 'User-defined List'){
+      output.list <- intersect(nonici.data.list()[['symbols']],pre_genesets_list[[selected_set_name]])
+    }else{
+      output.list <- ''
+    }
+    # remove_modal_spinner()  # 搜索结束后消除缓冲显示
     return(output.list)
   })
   observe({
     # 更新基因名
     updateSelectizeInput(session = session, 
                          inputId = "prognostic_symbol_id", 
-                         choices = c(nonici.data.list()[[3]]), 
-                         selected = NULL, 
+                         choices = c(nonici.data.list()[['symbols']]), 
+                         selected = prog.gene.list(), 
                          server   = TRUE)
+  })
+  
+  observe({
+    shinyjs::toggleState("prognostic_goButton", 
+                         !is.null(input$prognostic_symbol_id) && input$prognostic_symbol_id != "")
   })
   
   selected.row <- eventReactive(input$prog_pancancer_table_rows_selected,{
@@ -170,15 +257,20 @@ tab_00_prognosis$server <- function(input, output,session) {
     return(slted.row)
   })
   
+  # 输入为空验证
+  iv_prognostic <- InputValidator$new()
+  iv_prognostic$add_rule("prognostic_symbol_id", sv_required())
+  iv_prognostic$enable()
+  
   # 业务层：KM分析
   observeEvent(input$prognostic_goButton,{
     cat("====================== Server Explorer=============================\n")
     show_modal_progress_line(
       color = "#00A064", # DF0101
-      trail_color = "#e95420",
+      trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting Exploring..."
+      text = "Starting exploration ..."
     )
     
     ## 获取前端输入
@@ -186,6 +278,8 @@ tab_00_prognosis$server <- function(input, output,session) {
     cat(cat_prefix_prog,"-选择的瘤种: ", cancer_detail_in, "\n")
     symbol <- input$prognostic_symbol_id
     cat(cat_prefix_prog,"-选择的基因: ", symbol, "\n")
+    prognostic_logical_type <- input$prognostic_logical
+    cat(cat_prefix_prog,"-选择的多基因突变逻辑关系: ", prognostic_logical_type, "\n")
     
     # 获取基因列表和队列名称
     input.genes <- symbol
@@ -221,7 +315,7 @@ tab_00_prognosis$server <- function(input, output,session) {
           downloadButton(paste0('prog_pancancer', "_table_dl"), 
                          tags$span(
                            "DLTable",
-                            add_prompt(tags$span(icon(name = "question-circle")),
+                            add_prompt(tags$span(icon(name = "circle-question")),
                                        message = "Save results in a txt file.", 
                                        position = "left")),
                          style = "display:inline-block;float:left;color: #fff; 
@@ -230,7 +324,7 @@ tab_00_prognosis$server <- function(input, output,session) {
           downloadButton(paste0('prog_selected_row_plot_dl'), 
                          tags$span(
                            "DLGraph",
-                            add_prompt(tags$span(icon(name = "question-circle")),
+                            add_prompt(tags$span(icon(name = "circle-question")),
                                        message = "Save plot in a PDF file.", 
                                        position = "left")),
                          style = "display:inline-block;float:left;color: #fff; 
@@ -305,9 +399,44 @@ tab_00_prognosis$server <- function(input, output,session) {
         var.gene <- unlist(strsplit(gname,"#"))
         
         # 筛选出突变样本
-        tmp.mut.df <- tumor.mut.df %>%
-          dplyr::filter(hugo_symbol %in% var.gene) %>%
-          dplyr::distinct(sample_id,.keep_all = T)
+        if(!grepl("#",gname)){
+          tmp.mut.df <- tumor.mut.df %>%
+            dplyr::filter(hugo_symbol %in% var.gene) %>%
+            dplyr::distinct(sample_id,.keep_all = T)
+        }else{
+          # 多个基因时
+          # browser()
+          if(prognostic_logical_type == 'AND'){
+            # logical 为 AND 时
+            cat(cat_prefix_prog,"- 逻辑与选择多基因突变模式！\n")
+            tmp.mut.samples <- tumor.mut.df %>%
+              dplyr::filter(hugo_symbol %in% var.gene) %>%
+              dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+              dplyr::group_by(sample_id) %>%
+              dplyr::summarise(sample_count = n()) %>%
+              dplyr::ungroup() %>%
+              dplyr::filter(sample_count == length(var.gene)) # 取
+          }
+          if(prognostic_logical_type == 'OR'){
+            # logical 为 OR 时
+            cat(cat_prefix_prog,"- 逻辑或选择多基因突变模式！\n")
+            tmp.mut.samples <- tumor.mut.df %>%
+              dplyr::filter(hugo_symbol %in% var.gene) %>%
+              dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+              dplyr::group_by(sample_id) %>%
+              dplyr::summarise(sample_count = n()) %>%
+              dplyr::ungroup() %>%
+              dplyr::filter(sample_count >= 1) # 取
+          }
+          
+          tmp.mut.df <- tumor.mut.df %>%
+            dplyr::filter(hugo_symbol %in% var.gene) %>%
+            dplyr::filter(sample_id %in% tmp.mut.samples$sample_id) %>%
+            dplyr::distinct(sample_id,.keep_all = T)
+        }
+        
+        
+        
         
         # 初始化输出对象
         cox.df.pfs <- data.frame('PFS_m_mut' = NA,'PFS_m_wt' = NA,
@@ -333,8 +462,9 @@ tab_00_prognosis$server <- function(input, output,session) {
                                      NoOfPts = nrow(tumor.cli.df),
                                      NoOfMut = 0)
         }else{
+          # browser()
           plot.cli <- tumor.cli.df %>%
-            dplyr::mutate(is_mut = ifelse(sample_id %in% tmp.mut.df$sample_id,'Mut','Wt')) 
+            dplyr::mutate(is_mut = ifelse(sample_id %in% tmp.mut.df$sample_id,'Mut','WT')) 
           
           if(length(unique(plot.cli$is_mut)) == 1){
             # 全部为突变
@@ -347,8 +477,8 @@ tab_00_prognosis$server <- function(input, output,session) {
                                        NoOfMut = nrow(plot.cli))
           }else{
             
-            plot.cli <- plot.cli %>%
-              dplyr::mutate(is_mut = factor(is_mut,levels = c('Wt','Mut'))) %>%
+            prog.plot.cli <- plot.cli %>%
+              dplyr::mutate(is_mut = factor(is_mut,levels = c('WT','Mut'))) %>%
               dplyr::rename(type = is_mut)
             # Cox/Log-rank分析
             {
@@ -376,7 +506,7 @@ tab_00_prognosis$server <- function(input, output,session) {
                   dplyr::mutate(strata = substr(strata,6,nchar(strata)),
                                 Mid = round(Mid,2))
                 median.mut <- x.mtable[which(x.mtable$strata == 'Mut'),]$Mid
-                median.wt <- x.mtable[which(x.mtable$strata == 'Wt'),]$Mid
+                median.wt <- x.mtable[which(x.mtable$strata == 'WT'),]$Mid
                 
                 tmp.res <- c(median.mut,median.wt,
                              # Coef,HR,L95,H95,
@@ -388,8 +518,8 @@ tab_00_prognosis$server <- function(input, output,session) {
               }
               
               # PFS
-              if("pfs_months" %in% colnames(plot.cli)){
-                tmp.dat <- plot.cli %>%
+              if("pfs_months" %in% colnames(prog.plot.cli)){
+                tmp.dat <- prog.plot.cli %>%
                   dplyr::select(sample_id,times = pfs_months,status = pfs_status,type) %>%
                   dplyr::filter(!is.na(times),!is.na(status)) %>%
                   dplyr::arrange(type)
@@ -409,8 +539,8 @@ tab_00_prognosis$server <- function(input, output,session) {
                                                        ncol = 1, nrow = 2, align = "v") 
               }
               # PFI，TCGA数据为PFI，以此替代PFS输出
-              if("pfi_months" %in% colnames(plot.cli)){
-                tmp.dat <- plot.cli %>%
+              if("pfi_months" %in% colnames(prog.plot.cli)){
+                tmp.dat <- prog.plot.cli %>%
                   dplyr::select(sample_id,times = pfi_months,status = pfi_status,type) %>%
                   dplyr::filter(!is.na(times),!is.na(status)) %>%
                   dplyr::arrange(type)
@@ -430,9 +560,9 @@ tab_00_prognosis$server <- function(input, output,session) {
                                                        ncol = 1, nrow = 2, align = "v") 
               }
               # OS
-              if("os_months" %in% colnames(plot.cli)){
+              if("os_months" %in% colnames(prog.plot.cli)){
                 # browser()
-                tmp.dat <- plot.cli %>%
+                tmp.dat <- prog.plot.cli %>%
                   dplyr::select(sample_id,times = os_months,status = os_status,type) %>%
                   dplyr::mutate(times = as.numeric(times),
                                 status = as.numeric(status)) %>%
@@ -505,72 +635,72 @@ tab_00_prognosis$server <- function(input, output,session) {
             }
             
             # TMB 分析
-            if(("tmb" %in% colnames(plot.cli))){
-              plot.cli$tmb <- as.numeric(plot.cli$tmb)
-              tmp.p <- con.wilcox(plot.cli,'tmb')
-              median.tmb.mut = median(plot.cli[which(plot.cli$type == 'Mut'),]$tmb,na.rm = T)
-              median.tmb.wt = median(plot.cli[which(plot.cli$type == 'Wt'),]$tmb,na.rm = T)
+            if(("tmb" %in% colnames(prog.plot.cli))){
+              prog.plot.cli$tmb <- as.numeric(prog.plot.cli$tmb)
+              tmp.p <- con.wilcox(prog.plot.cli,'tmb')
+              median.tmb.mut = median(prog.plot.cli[which(prog.plot.cli$type == 'Mut'),]$tmb,na.rm = T)
+              median.tmb.wt = median(prog.plot.cli[which(prog.plot.cli$type == 'WT'),]$tmb,na.rm = T)
               
               tmb.res.df <-  data.frame("TMB_p" = tmp.p,
                                         "TMB_m_mut" = median.tmb.mut,
                                         "TMB_m_wt" = median.tmb.wt)
               
               #绘图
-              km.graphic <- plot.cli %>%
+              km.graphic <- prog.plot.cli %>%
                 dplyr::select(sample_id,group = type,img_name = tmb) %>%
-                func.ggboxplot(group1 = 'Mut',group2 = 'Wt',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'TMB')
+                func.ggboxplot(group1 = 'Mut',group2 = 'WT',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'TMB')
               middle.prog.graphic[[paste0(sid,"_",gname)]]$box_tmb <- km.graphic
               middle.plot.list[['tmb']] <- km.graphic
             }
             
             # Neoantigen 分析
-            if(("neoantigen" %in% colnames(plot.cli))){
-              plot.cli$neoantigen <- as.numeric(plot.cli$neoantigen)
-              neo.p <- con.wilcox(plot.cli,'neoantigen')
-              median.neo.mut = median(plot.cli[which(plot.cli$type == 'Mut'),]$neoantigen,na.rm = T)
-              median.neo.wt = median(plot.cli[which(plot.cli$type == 'Wt'),]$neoantigen,na.rm = T)
+            if(("neoantigen" %in% colnames(prog.plot.cli))){
+              prog.plot.cli$neoantigen <- as.numeric(prog.plot.cli$neoantigen)
+              neo.p <- con.wilcox(prog.plot.cli,'neoantigen')
+              median.neo.mut = median(prog.plot.cli[which(prog.plot.cli$type == 'Mut'),]$neoantigen,na.rm = T)
+              median.neo.wt = median(prog.plot.cli[which(prog.plot.cli$type == 'WT'),]$neoantigen,na.rm = T)
               neo.res.df <-  data.frame("Neoantigen_p" = neo.p,
                                         "Neo_m_mut" = median.neo.mut,
                                         "Neo_m_wt"  = median.neo.wt)
               
               #绘图
-              km.graphic <- plot.cli %>%
+              km.graphic <- prog.plot.cli %>%
                 dplyr::select(sample_id,group = type,img_name = neoantigen) %>%
-                func.ggboxplot(group1 = 'Mut',group2 = 'Wt',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'Neoantigen')
+                func.ggboxplot(group1 = 'Mut',group2 = 'WT',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'Neoantigen')
               middle.prog.graphic[[paste0(sid,"_",gname)]]$box_neoantigen <- km.graphic
               middle.plot.list[['neoantigen']] <- km.graphic
             }
             
             # PD_L1_Exp 分析
-            if(("pdl1_exp" %in% colnames(plot.cli))){
-              plot.cli$pdl1_exp <- as.numeric(plot.cli$pdl1_exp)
-              pdl1.p <- con.wilcox(plot.cli,'pdl1_exp')
-              median.pdl1.mut = median(plot.cli[which(plot.cli$type == 'Mut'),]$pdl1_exp,na.rm = T)
-              median.pdl1.wt = median(plot.cli[which(plot.cli$type == 'Wt'),]$pdl1_exp,na.rm = T)
+            if(("pdl1_exp" %in% colnames(prog.plot.cli))){
+              prog.plot.cli$pdl1_exp <- as.numeric(plot.cli$pdl1_exp)
+              pdl1.p <- con.wilcox(prog.plot.cli,'pdl1_exp')
+              median.pdl1.mut = median(prog.plot.cli[which(prog.plot.cli$type == 'Mut'),]$pdl1_exp,na.rm = T)
+              median.pdl1.wt = median(prog.plot.cli[which(prog.plot.cli$type == 'WT'),]$pdl1_exp,na.rm = T)
               pdl1exp.res.df <-  data.frame("PDL1exp_p" = pdl1.p,
                                             "PDL1_m_mut" = median.pdl1.mut,
                                             "PDL1_m_wt"  = median.pdl1.wt)
               #绘图
-              km.graphic <- plot.cli %>%
+              km.graphic <- prog.plot.cli %>%
                 dplyr::select(sample_id,group = type,img_name = pdl1_exp) %>%
-                func.ggboxplot(group1 = 'Mut',group2 = 'Wt',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'PD-L1 Expression')
+                func.ggboxplot(group1 = 'Mut',group2 = 'WT',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'PD-L1 Expression')
               middle.prog.graphic[[paste0(sid,"_",gname)]]$box_pdl1_exp <- km.graphic
               middle.plot.list[['pdl1_exp']] <- km.graphic
             }
             
             # tumor_purity 分析
-            if(("tumor_purity" %in% colnames(plot.cli))){
-              plot.cli$tumor_purity <- as.numeric(plot.cli$tumor_purity)
-              tp.p <- con.wilcox(plot.cli,'tumor_purity')
-              median.tp.mut = median(plot.cli[which(plot.cli$type == 'Mut'),]$tumor_purity,na.rm = T)
-              median.tp.wt = median(plot.cli[which(plot.cli$type == 'Wt'),]$tumor_purity,na.rm = T)
+            if(("tumor_purity" %in% colnames(prog.plot.cli))){
+              prog.plot.cli$tumor_purity <- as.numeric(prog.plot.cli$tumor_purity)
+              tp.p <- con.wilcox(prog.plot.cli,'tumor_purity')
+              median.tp.mut = median(prog.plot.cli[which(prog.plot.cli$type == 'Mut'),]$tumor_purity,na.rm = T)
+              median.tp.wt = median(prog.plot.cli[which(prog.plot.cli$type == 'WT'),]$tumor_purity,na.rm = T)
               tp.res.df <-  data.frame("Tumor_Purity_p" = tp.p,
                                        "Tumor_Purity_m_mut" = median.tp.mut,
                                        "Tumor_Purity_m_wt"  = median.tp.wt)
               #绘图
-              km.graphic <- plot.cli %>%
+              km.graphic <- prog.plot.cli %>%
                 dplyr::select(sample_id,group = type,img_name = tumor_purity) %>%
-                func.ggboxplot(group1 = 'Mut',group2 = 'Wt',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'Tumor Purity')
+                func.ggboxplot(group1 = 'Mut',group2 = 'WT',color1 = "#FF9800",color2 = "#2196F3",ytitle = 'Tumor Purity')
               middle.prog.graphic[[paste0(sid,"_",gname)]]$box_tumor_purity <- km.graphic
               middle.plot.list[['tumor_purity']] <- km.graphic
             }
@@ -579,16 +709,16 @@ tab_00_prognosis$server <- function(input, output,session) {
             # orr.res.df  = data.frame("ORR_P.method" = NA,"ORR_P" = NA)
             # response.res.df = data.frame("Resp_P.method" = NA,"Resp_P" = NA)
             
-            if("pdl1" %in% colnames(plot.cli)) {
-              pdl1.res.df <- cat.chisqtest(plot.cli,'pdl1')
+            if("pdl1" %in% colnames(prog.plot.cli)) {
+              pdl1.res.df <- cat.chisqtest(prog.plot.cli,'pdl1')
               colnames(pdl1.res.df) <- c('PDL1_P.method','PDL1_P')
             }
-            if("orr" %in% colnames(plot.cli)) {
-              orr.res.df <- cat.chisqtest(plot.cli,'orr')
+            if("orr" %in% colnames(prog.plot.cli)) {
+              orr.res.df <- cat.chisqtest(prog.plot.cli,'orr')
               colnames(orr.res.df) <- c('ORR_P.method','ORR_P')
             }
-            if("response" %in% colnames(plot.cli)) {
-              response.res.df <- cat.chisqtest(plot.cli,'response')
+            if("response" %in% colnames(prog.plot.cli)) {
+              response.res.df <- cat.chisqtest(prog.plot.cli,'response')
               colnames(response.res.df) <- c('Resp_P.method','Resp_P')
             }
             
@@ -596,8 +726,8 @@ tab_00_prognosis$server <- function(input, output,session) {
                                        Cancer = cancer_detail_in,
                                        Gene = gname,
                                        Desciption = "MUT/WT",
-                                       NoOfPts = nrow(plot.cli),
-                                       NoOfMut = nrow(plot.cli[which(plot.cli$type == 'Mut'),]))
+                                       NoOfPts = nrow(prog.plot.cli),
+                                       NoOfMut = nrow(prog.plot.cli[which(prog.plot.cli$type == 'Mut'),]))
             
             
           }

@@ -1,17 +1,17 @@
 {
     "sortOrder": [
         {
-            "columnIndex": 2,
-            "ascending": true
-        },
-        {
             "columnIndex": 4,
             "ascending": false
+        },
+        {
+            "columnIndex": 2,
+            "ascending": true
         },
         {
             "columnIndex": 3,
             "ascending": false
         }
     ],
-    "path": "~/Documents/Rprojects/Pro3BNR/A02.proj/P20.OmicsMiner"
+    "path": "~/Documents/Rprojects/Pro3BNR/A02.proj/P20.OmicsMiner/IMPACT/tab_02_tumor_immunogenicity"
 }

@@ -18,7 +18,7 @@ cat_prefix_tme_corr <- 'TME-Corr'
 sidebar <- sidebarPanel(
   id = 'corr_sidebar',
   width = 3,
-  h3("TME Correlation Analyses"),
+  h3("TME Correlation Analysis"),
   # 研究类型
   awesomeRadio(inputId = "corr_study_type",
                label = "Select study types", 
@@ -40,6 +40,7 @@ sidebar <- sidebarPanel(
                                choices = NULL,
                                multiple = FALSE,
                                selected = NULL)),
+  tags$hr(style="border-color: purple;"),
   conditionalPanel('input.corr_study_id != ""',
                    # 队列数据的基因list
                    selectizeInput(inputId = "corr_symbol_id", 
@@ -51,30 +52,6 @@ sidebar <- sidebarPanel(
                                                  maxItems = 10,
                                                  placeholder = "No more than 10 genes.",
                                                  plugins = list('remove_button', 'drag_drop')))),
-  # 分组颜色
-  fluidRow(
-    column(6,colourpicker::colourInput(inputId = "corr_colorg1_id", 
-                                       label = tags$span(
-                                          add_prompt(tags$span(icon(name = "question-circle")),
-                                                     message = "Color for positive correlation", 
-                                                     position = "right"),
-                                         'Color 1'), 
-                                       value = "#FF9800", 
-                                       showColour = c("both", "text","background"), 
-                                       palette = c("square", "limited"), 
-                                       allowTransparent = FALSE, 
-                                       returnName = TRUE)),
-    column(5,colourpicker::colourInput(inputId = "corr_colorg2_id", 
-                                       label = tags$span(
-                                          add_prompt(tags$span(icon(name = "question-circle")),
-                                                     message = "Color for nagative correlation", 
-                                                     position = "right"),
-                                         'Color 2'),  
-                                       value = "#2196F3", 
-                                       showColour = c("both", "text","background"), 
-                                       palette = c("square", "limited"), 
-                                       allowTransparent = FALSE, 
-                                       returnName = TRUE))),
   # 基因类型：RNA,Protein,Methyl
   pickerInput("corr_gene_type",
               label = 'Select immune genes or signatures', 
@@ -95,6 +72,7 @@ sidebar <- sidebarPanel(
     status = "success",
     checkbox = TRUE
   ),
+  tags$hr(style="border-color: purple;"),
   # 输出的图片格式
   awesomeRadio(
     inputId = "corr_figure_type",
@@ -108,10 +86,45 @@ sidebar <- sidebarPanel(
     status = "success",
     checkbox = TRUE
     ),
+  # 分组颜色
+  fluidRow(
+    column(6,colourpicker::colourInput(inputId = "corr_colorg1_id", 
+                                       label = tags$span(
+                                         add_prompt(tags$span(icon(name = "circle-question")),
+                                                    message = "Color for positive correlation", 
+                                                    position = "right"),
+                                         'Color 1'), 
+                                       value = "#FF9800", 
+                                       showColour = c("both", "text","background"), 
+                                       palette = c("square", "limited"), 
+                                       allowTransparent = FALSE, 
+                                       returnName = TRUE)),
+    column(5,colourpicker::colourInput(inputId = "corr_colorg2_id", 
+                                       label = tags$span(
+                                         add_prompt(tags$span(icon(name = "circle-question")),
+                                                    message = "Color for nagative correlation", 
+                                                    position = "right"),
+                                         'Color 2'),  
+                                       value = "#2196F3", 
+                                       showColour = c("both", "text","background"), 
+                                       palette = c("square", "limited"), 
+                                       allowTransparent = FALSE, 
+                                       returnName = TRUE))),
   # 提交按钮
-  actionButton(inputId = "corr_goButton",
-               label = "Submit",
-               class ="btn-primary")
+  # actionButton(inputId = "corr_goButton",
+  #              label = "Submit",
+  #              class ="btn-primary")
+  fluidRow(
+    column(2, 
+           div(style="display:inline-block",actionButton(inputId = "corr_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
+    ),
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_corr", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
+  )
   
 )
 
@@ -128,6 +141,13 @@ tab_03_tme_corr$server <- function(input, output,session) {
   
   # 定义变量存储输出对象
   output.graphic <- reactiveValues()
+  
+  observeEvent(input[['reset_input_corr']], {
+    shinyjs::reset("corr_sidebar")
+  })
+  observeEvent(input$reset_input_corr, {
+    output[['corr_maintabs']] <- NULL
+  })
   
   # 0.根据队列类型（ICI或非ICI队列）从数据库获取肿瘤名称名称
   tumor.names.df <- eventReactive(input$corr_study_type,{
@@ -289,6 +309,10 @@ tab_03_tme_corr$server <- function(input, output,session) {
                       selected = db_choices[[1]][[1]])
   })
   
+  observe({
+    shinyjs::toggleState("corr_goButton", 
+                         !is.null(input$corr_symbol_id) && input$corr_symbol_id != "" )
+  })
   
   # 重置输入
   # observeEvent(input$corr_reset, {
@@ -331,6 +355,11 @@ tab_03_tme_corr$server <- function(input, output,session) {
                               temp.df <- queryDataFromMySQL(tbl_name)
                               return(temp.df)
                             })
+  # 输入为空验证
+  iv_corr <- InputValidator$new()
+  iv_corr$add_rule("corr_symbol_id", sv_required())
+  iv_corr$add_rule("corr_gene_type", sv_required())
+  iv_corr$enable()
   
   # 业务层：Corr分析
   observeEvent(input$corr_goButton,{
@@ -340,7 +369,7 @@ tab_03_tme_corr$server <- function(input, output,session) {
       trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting Correaltion Computation..."
+      text = "Starting correaltion analysis ..."
     )
     # browser()
     selected_study_id = input$corr_study_id
@@ -461,7 +490,8 @@ tab_03_tme_corr$server <- function(input, output,session) {
               t() %>% as.data.frame() 
           }
           # 计算相关系数
-          corr.df <- psych::corr.test(dat.x,dat.y,method = input.corrtype,adjust = 'fdr')
+          # browser()
+          corr.df <- psych::corr.test(dat.x,dat.y,method = input.corrtype,adjust = 'BH')
         }
         
         # 一个Tab输出
@@ -475,14 +505,14 @@ tab_03_tme_corr$server <- function(input, output,session) {
             downloadButton(paste0(gname, "_dl_plot_corr_",tolower(cli.name)), 
                            tags$span(
                              "DLGraph",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save plot in a PDF file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
             downloadButton(paste0(gname, "_dl_tbl_corr_",tolower(cli.name)), 
                            tags$span(
                              "DLTable",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save data of corr plot in a txt file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),

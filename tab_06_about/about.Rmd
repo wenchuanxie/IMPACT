@@ -1,19 +1,47 @@
 ---
 title: "About"
-author: "Yuchen Liao"
+author: "Wenchuan Xie"
 date: "6/28/2022"
 output: html_document
-runtime: shiny
+# runtime: shiny
 ---
 
 ## Introduction
 
-Immunotherapies, including antibodies to programmed death receptor 1 (PD-1) or its ligand (PD-L1) and CTL-associated protein 4 (CTLA-4), have wide clinical application for a range of solid tumors, but only a subset of patients can benefit from them. A large number of studies have focused on the identification of predictive biomarkers for immunotherapy. IMPACT is a web-based platform for the exploration in immunotherapeutic predictive and cancer prognostic biomarkers using genomic, transcriptomic and proteomic data from the in-house cohorts, literature and public databases, including TCGA, CPTAC, ICGC, and GEO. IMPACT can be used for survival analysis, meta-analysis, interaction analysis, mutational landscape analysis, immunogenicity analysis, and tumor immune microenvironment analysis. Besides of the routine exploration of biomarkers, four key clinical and scientific questions are specially covered by the above analysis:
+<!-- Immunotherapies, including antibodies to programmed death receptor 1 (PD-1) or its ligand (PD-L1) and CTL-associated protein 4 (CTLA-4), have wide clinical application for a range of solid tumors, but only a subset of patients can benefit from them. A large number of studies have focused on the identification of predictive biomarkers for immunotherapy. IMPACT is a web-based platform for the exploration in immunotherapeutic predictive and cancer prognostic biomarkers using genomic, transcriptomic and proteomic data from the in-house cohorts, literature and public databases, including TCGA, CPTAC, ICGC, GEO and OncoSG. IMPACT can be used for survival analysis, meta-analysis, interaction analysis, mutational landscape analysis, immunogenicity analysis, and tumor immune microenvironment analysis. Besides of the routine exploration of biomarkers, four key clinical and scientific questions are specially covered by the above analysis: -->
 
-1. whether mutations in a gene set (e.g. some pathways), or a single gene, have the potential to be a predictive or prognostic biomarker; 
-2. the meta-analysis of survival analysis across multiple studies;
-3. the potential interaction effects of biomarker-biomarker or biomarker-clinical variables on the association with prognosis;
-4. whether the biomarker is predictive or prognostic in two-arm clinical trials.
+<!-- 1. whether mutations in a gene set (e.g. some pathways), or a single gene, have the potential to be a predictive or prognostic biomarker;  -->
+<!-- 2. the meta-analysis of survival analysis across multiple studies; -->
+<!-- 3. the potential interaction effects of biomarker-biomarker or biomarker-clinical variables on the association with prognosis; -->
+<!-- 4. whether the biomarker is predictive or prognostic in two-arm clinical trials. -->
+
+Identifying suitable biomarkers for immune checkpoint inhibitors (ICIs) could efficiently screen beneficiaries and improve the clinical use of ICIs currently. However, the biomarker discovery process could be largely accelerated with an integrated analytical platform combining large-scale high-quality datasets and a comprehensive solution. Thus, we developed a publicly available web server, IMPACT, based on both public and in-house datasets, which can facilitate the comprehensive investigation and visualization of predictive or prognostic biomarkers, relevant interaction effects, and biological mechanisms (http://impact.brbiotech.com/ or http://www.brimpact.cn/)
+
+Up to now, IMPACT contains 6,276 patients curated from 3 in-house cohorts and 24 public datasets, allows users to upload their own data, and consists of 11 function modules:
+
+- PredExplore (Immunotherapy Predictive Biomarker Exploration)
+- ProgExplore (Cancer Prognostic Biomarker Exploration)
+- Survival Analysis
+  + Kaplan-Meier Curve 
+  + Cox Regression
+  + Subgroup analysis
+  + Cutpiont Analysis
+  + Immunotherapy Response
+- Interaction Analysis
+- Immunogenicity Analysis
+- TME Analysis
+  + TME Correlation Analysis
+  + TME Comparative Analysis
+- Mutation profiles
+
+All the analyses are served to solve the following three clinical challenges: 
+
+- Understanding ICIs biomarkers with synergistic or interaction effects; 
+- Identifying a predictive biomarker specified for ICIs;
+- Exploring the functional mechanism of the biomarkers of interest;
+
+
+Compared with other available web-based platforms, IMPACT exclusively provides interaction effect analyses module and it also optimized several conventional functions for discovering novel biomarkers, including but not limited to , selecting specific variant types, automatically screening co-mutations among multiple genes, and exploring cut-off values for gene expression biomarkers, all of which have been demonstrated with examples in the manuscript. 
 
 
 ## Acknowledgements
@@ -22,6 +50,11 @@ We give our special thanks to [Shiny Gallery](https://shiny.rstudio.com/gallery/
 
 ## Contact us
 
-If you have any questions about the IMPACT, please feel free to contact: **Zhijie Wang** (`jie_969@163.com`) . When describing the issues, please attach the related screenshots and provide the information about the problem as detailed as possible, including the information of the browser you used.
+If you have any questions about the IMPACT, please feel free to contact: [**Zhijie Wang**] (`jie_969@163.com`), [**Yutao Liu**](liuyutao2529@126.com) and [**Wenchuan Xie**](wenchuan.xie@gmail.com). When describing the issues, please attach the related screenshots and provide the information about the problem as detailed as possible, including the information of the browser you used.
+
+
+<!-- ## Update info -->
+
+
 
 

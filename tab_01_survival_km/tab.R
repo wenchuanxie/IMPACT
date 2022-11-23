@@ -11,13 +11,30 @@
 
 source("./r/func.survivalplot.R")
 
-#sd
+# 至少选择一项
+# psy_js <- "
+# $(document).ready(function(){
+#   $('#km_biopsy_status').on('show.bs.select', function(){
+#     $('a[role=option]').on('click', function(e){
+#       var selections = $('#km_biopsy_status').val();
+#       if(selections.length === 1 && $(this).hasClass('selected')){
+#         e.stopImmediatePropagation();
+#       };
+#     });
+#   }).on('hide.bs.select', function(){
+#     $('a[role=option]').off('click');
+#   });
+# });"
 
 tab_01_survival_km <- list()
+cat_prefix_km <- 'KM'
 sidebar <- sidebarPanel(
+  # tags$head(tags$script(HTML(psy_js))),
   id = 'km_sidebar',
   width = 3,
   h3("Kaplan-Meier Curve"),
+  useShinyjs(),
+  div(id = "km_form",
   # 研究类型
   awesomeRadio(inputId = "km_study_type",
                label = "Select study types", 
@@ -39,15 +56,8 @@ sidebar <- sidebarPanel(
                                choices = NULL,
                                multiple = FALSE,
                                selected = NULL)),
-  # 队列数据类型：Mutation,RNA,Protein,Methyl
-  # conditionalPanel(
-  #   condition = "km_study_id != ''",
-  #   pickerInput("km_data_type",
-  #               label = 'Pls Select Data Type:', 
-  #               choices = NULL,
-  #               selected = NULL, 
-  #               multiple = FALSE)
-  #   ),
+  tags$hr(style="border-color: purple;"),
+  # h3("Gene parameters", style = "margin-bottom: 25px;color:#00a064"),
   conditionalPanel('input.km_study_id != ""',
                    # 队列数据类型：Mutation,RNA,Protein,Methyl
                    pickerInput("km_data_type",
@@ -63,24 +73,35 @@ sidebar <- sidebarPanel(
                                   multiple = T, 
                                   options = list(delimiter = " ", create = T,maxItems = 10,
                                                  placeholder = "No more than 10 genes.",
+                                                 persist = TRUE,
                                                  plugins = list('remove_button', 'drag_drop')))),
+  
   conditionalPanel('input.km_data_type == "Mutation"',
                    # 队列数据的基因突变类型
                    pickerInput(inputId = "km_vartype_id",
                                label = tags$span(
-                                  add_prompt(tags$span(icon(name = "question-circle")),
+                                  add_prompt(tags$span(icon(name = "circle-question")),
                                              message = "Variant Classification for Mutation data", 
                                              position = "right"),
                                  "Select gene mutation types"),
                                choices = NULL,
                                multiple = TRUE,
-                               selected = NULL)),
+                               selected = NULL),
+                   awesomeRadio(
+                     inputId = "km_logical",
+                     label = "Mutations in all(AND)/any(OR) quried genes",
+                     inline = T,
+                     choices = c("AND" ,"OR"),
+                     selected = "AND",
+                     status = "success",
+                     checkbox = TRUE
+                   )),
   conditionalPanel("input.km_data_type == 'Expr' || input.km_data_type == 'Proteome'",
                    # 队列数据的基因表达阈值
                    fluidRow(
-                     column(6,numericInput(inputId = "km_exprcut1_id",
+                     column(7,numericInput(inputId = "km_exprcut1_id",
                                            label = tags$span(
-                                              add_prompt(tags$span(icon(name = "question-circle")),
+                                              add_prompt(tags$span(icon(name = "circle-question")),
                                                          message = "Percentile threshold for RNA data", 
                                                          position = "right"),
                                              "Percentile cutoff (%,High):"),
@@ -93,11 +114,39 @@ sidebar <- sidebarPanel(
                                            min = 0,
                                            max = 100,step = NA,width = '100%'))
                    )),
+
+  conditionalPanel('input.km_study_type == "Immunogenomics Studies"',
+                   # ici_treatment_status 免疫治疗取样时间点参数控制
+                   tags$hr(style="border-color: purple;"),
+                   # h3("Sample parameters", style = "margin-bottom: 25px;color:#00a064"),
+                   pickerInput(inputId = "km_biopsy_status",
+                               label = tags$span(
+                                 add_prompt(tags$span(icon(name = "circle-question")),
+                                            message = "Biopsy time of tumor sample", 
+                                            position = "right"),
+                                 "Biopsy time (Pre-,On- or Post-treatment):"),
+                               choices = NULL,
+                               multiple = TRUE,
+                               selected = NULL),
+                   # 免疫治疗药物类型选择
+                   # tags$head(tags$script(HTML(js_icitype))),
+                   pickerInput(inputId = "km_ici_type",
+                               label = tags$span(
+                                 add_prompt(tags$span(icon(name = "circle-question")),
+                                            message = "Immune checkpoint inhibitors types", 
+                                            position = "right"),
+                                 "ICIs type:"),
+                               choices = NULL,
+                               multiple = TRUE,
+                               selected = NULL)
+                   ),
+  tags$hr(style="border-color: purple;"),
+  # h3("Graphic parameters", style = "margin-bottom: 25px;color:#00a064"),
   # 分组颜色
   fluidRow(
     column(6,colourpicker::colourInput(inputId = "km_colorg1_id", 
                                        label = tags$span(
-                                          add_prompt(tags$span(icon(name = "question-circle")),
+                                          add_prompt(tags$span(icon(name = "circle-question")),
                                                      message = "Color for High/Mut group", 
                                                      position = "right"),
                                          'Color 1'), 
@@ -106,9 +155,10 @@ sidebar <- sidebarPanel(
                                        palette = c("square", "limited"), 
                                        allowTransparent = FALSE, 
                                        returnName = TRUE)),
+    column(1),
     column(5,colourpicker::colourInput(inputId = "km_colorg2_id", 
                                        label = tags$span(
-                                          add_prompt(tags$span(icon(name = "question-circle")),
+                                          add_prompt(tags$span(icon(name = "circle-question")),
                                                      message = "Color for Low/Wt group", 
                                                      position = "right"),
                                          'Color 2'),  
@@ -117,18 +167,29 @@ sidebar <- sidebarPanel(
                                        palette = c("square", "limited"), 
                                        allowTransparent = FALSE, 
                                        returnName = TRUE))
+    )),
+  awesomeRadio(inputId = "km_tbl_loc",
+               label = "Kaplan-Meier Annotation location:", 
+               choices = c("Top right" = "topright", "Bottom right" = "bottomright","Bottom left" = "bottomleft"),
+               selected = "topright",
+               inline = TRUE,
+               status = "success"),
+  fluidRow(
+    column(2, 
+           # actionButton(inputId = "km_goButton",label = "Submit",class ="btn-primary")
+           div(style="display:inline-block",actionButton(inputId = "km_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
     ),
-  # 提交按钮
-  actionButton(inputId = "km_goButton",
-               label = "Submit",
-               class ="btn-primary"
-               # size = 'big',
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_km", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
   )
-  # actionButton('km_reset','Reset',class ="primary")
-  
 )
 
 mainpage <- mainPanel(
+  useShinyjs(),
   id = 'km_mainpage',
   width = 9,
   uiOutput(outputId='km_maintabs')
@@ -137,23 +198,27 @@ mainpage <- mainPanel(
 tab_01_survival_km$ui <- sidebarLayout(sidebar, mainpage)
 
 tab_01_survival_km$server <- function(input, output,session) {
-  cat("=========================== Start KM ================================\n")
+  cat("========================= Start KM ==================================\n")
   
   # 定义变量存储输出对象
   output.graphic <- reactiveValues()
-
+  
+  observeEvent(input$reset_input_km, {
+    shinyjs::reset("km_sidebar")
+  })
+  observeEvent(input$reset_input_km, {
+    output$km_maintabs <- NULL
+  })
   # 0.根据队列类型（ICI或非ICI队列）从数据库获取肿瘤名称名称
-  tumor.names.df <- eventReactive(input$km_study_type,{
+  km_study_df <- eventReactive(input$km_study_type,{
     study_type <- input$km_study_type
     temp.df <- study.df 
     if (study_type == 'Immunogenomics Studies'){
       temp.df <- temp.df %>%
         dplyr::filter(study_type == 'ICIs')
-    }else{ #  if(study_type == 'GEO/Paper Studies')
+    }else{ 
       temp.df <- temp.df %>%
-        dplyr::filter(study_type == 'nonICIs') #%>%
-        # dplyr::filter(study_id != 'TCGA') %>%
-        # dplyr::mutate(study_id = ifelse(study_id == 'TCGA',paste0(study_id,"_",tumor_detail),study_id))
+        dplyr::filter(study_type == 'nonICIs') 
     }
     temp.df
     
@@ -161,31 +226,31 @@ tab_01_survival_km$server <- function(input, output,session) {
   
   # 将获取到的内更新到页面
   observe({
+    # browser()
+    km_cancer_detail_list <- unique(km_study_df()$tumor_detail)
     updatePickerInput(session = session, 
                       inputId = "km_cancer_detail",
-                      choices = unique(tumor.names.df()$tumor_detail), 
-                      selected = NULL)
+                      choices = km_cancer_detail_list, 
+                      selected = km_cancer_detail_list[1])
   })
   
   # 1.根据肿瘤名称和队列类型（ICI或非ICI队列）从数据库获取队列名称
-  study.names.df <- eventReactive(c(input$km_cancer_detail),{
+  km_study_tumor_df <- eventReactive(c(input$km_cancer_detail),{
     study_type <- input$km_study_type
     km_in_cancer_detail <- input$km_cancer_detail
-    temp.study.df <- study.df %>%
+    if(is.null(km_in_cancer_detail)) km_in_cancer_detail <- unique(km_study_df()$tumor_detail)[1]
+    temp.study.df <- km_study_df() %>%
       dplyr::filter(tumor_detail == km_in_cancer_detail)
-    if (study_type == 'Immunogenomics Studies'){
-      temp.study.df <- temp.study.df %>%
-        dplyr::filter(study_type == 'ICIs')
-    }else{
-      temp.study.df <- temp.study.df %>%
-        dplyr::filter(study_type == 'nonICIs')
-    }
     temp.study.df
   })
   # 将获取到的肿瘤队列list更新到页面
   observe({
-    updatePickerInput(session = session, inputId = "km_study_id",
-                      choices = unique(study.names.df()$study_id), selected = NULL)
+    # browser()
+    km_study_id_list <- unique(km_study_tumor_df()$study_id)
+    updatePickerInput(session = session, 
+                      inputId = "km_study_id",
+                      choices = km_study_id_list, 
+                      selected = km_study_id_list[1])
   })
   # 2. 获取数据类型
   observeEvent(c(input$km_study_id),{
@@ -198,16 +263,31 @@ tab_01_survival_km$server <- function(input, output,session) {
     cat("KM-前端返回的队列名称: ",km_in_study_id,"\n")
     
     # 本次过滤后应只有一条记录
-    temp.df <- study.df %>%
-      dplyr::filter(study_type %in% km_in_study_type) %>%
-      dplyr::filter(tumor_detail %in% km_in_cancer_detail) %>%
+    temp.df <- km_study_tumor_df() %>%
+      # dplyr::filter(study_type %in% km_in_study_type) %>%
+      # dplyr::filter(tumor_detail %in% km_in_cancer_detail) %>%
       dplyr::filter(study_id %in% km_in_study_id) 
-    
+    # browser()
     data.types <- unique(unlist(str_split(temp.df$data_type[1],"/")))
     # 更新数据类型
     updatePickerInput(session = session, inputId = "km_data_type",
                       choices = data.types, 
                       selected = data.types[1])
+    
+    # 更新活检时间状态
+    biopsy.status <- unique(unlist(str_split(temp.df$ici_study_biopsy[1],"#")))
+    updatePickerInput(session = session,
+                         inputId = "km_biopsy_status",
+                         choices = biopsy.status,
+                         selected = biopsy.status)
+    
+    
+    # 更新免疫治疗药物类型
+    biopsy.status <- unique(unlist(str_split(temp.df$ici_type[1],",")))
+    updatePickerInput(session = session,
+                      inputId = "km_ici_type",
+                      choices = biopsy.status,
+                      selected = biopsy.status)
     
     db.tmp.dat <- data.frame()
     if(data.types[1] == 'Mutation'){
@@ -303,6 +383,12 @@ tab_01_survival_km$server <- function(input, output,session) {
   #                      min = 0, max = 100, step = NA)
   # })  
   
+  
+  observe({
+    shinyjs::toggleState("km_goButton", 
+                         !is.null(input$km_symbol_id) && input$km_symbol_id != "" )
+  })
+  
   # 从DB获取数据
   # 临床信息
   db.dat.cli <- eventReactive(input$km_study_id,{
@@ -322,6 +408,7 @@ tab_01_survival_km$server <- function(input, output,session) {
         # GEO队列存在非肿瘤样本，需选择出肿瘤样本
         dplyr::filter(sample_type == 'T') 
     }
+    
     return(temp.df)
   })
   # 突变或者表达谱
@@ -343,16 +430,27 @@ tab_01_survival_km$server <- function(input, output,session) {
     temp.df <- queryDataFromMySQL(tbl_name)
     return(temp.df)
   })
+  
+  # 输入为空验证
+  iv_km <- InputValidator$new()
+  # iv_km$add_rule("km_cancer_detail", sv_required())
+  # iv_km$add_rule("km_study_id", sv_required())
+  # iv_km$add_rule("km_data_type", sv_required())
+  iv_km$add_rule("km_symbol_id", sv_required())
+  iv_km$add_rule("km_vartype_id", sv_required())
+  iv_km$add_rule("km_biopsy_status", sv_required())
+  iv_km$add_rule("km_ici_type", sv_required())
+  iv_km$enable()
 
   # 业务层：KM分析
   observeEvent(input$km_goButton,{
     cat("=========================== Server KM ==============================\n")
     show_modal_progress_line(
       color = "#00A064", # DF0101
-      trail_color = "#e95420",
+      trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting Survival Computation..."
+      text = "Starting survival analysis ..."
     )
     study_type_in <- input$km_study_type
     cat("选择的研究队列类型: ", study_type_in, "\n")
@@ -378,6 +476,11 @@ tab_01_survival_km$server <- function(input, output,session) {
     vartype <- input$km_vartype_id
     cat("选择的基因突变类型: ", vartype, "\n")
     
+    # 活检取样时间点
+    biopsy_time <- input$km_biopsy_status
+    # 免疫治疗药物类型
+    ici_type <- input$km_ici_type
+    
     exprcut1 <- input$km_exprcut1_id
     exprcut2 <- input$km_exprcut2_id
     cat("选择的基因高表达分位数: ", exprcut1, "\n")
@@ -387,6 +490,11 @@ tab_01_survival_km$server <- function(input, output,session) {
     colorg2 <- input$km_colorg2_id
     cat("选择的样本分组1颜色: ", colorg1, "\n")
     cat("选择的样本分组2颜色: ", colorg2, "\n")
+    
+    input.tbl.loc <- input$km_tbl_loc
+    
+    km_logical_type <- input$km_logical
+    cat(cat_prefix_km,"-选择的多基因突变逻辑关系: ", km_logical_type, "\n")
     
     # 数据清理、绘图、输出
     input.genes <- symbol 
@@ -417,7 +525,7 @@ tab_01_survival_km$server <- function(input, output,session) {
       lapply(seq(1,n), function(i) {
         gname <- input.genes[i]
         symbol.name <- gname
-        if(gname == 'All Queried Genes') {symbol.name <- input.genes} # EGFR#TP53#ALK
+        if(gname == 'All Queried Genes') {symbol.name <- setdiff(input.genes,gname)} # 从EGFR,TP53,ALK,All Queried Genes中剔除掉“All Queried Genes”
         
         update_modal_progress(
           value = i / n,
@@ -425,21 +533,96 @@ tab_01_survival_km$server <- function(input, output,session) {
         )
         
         # 取出时间字段,只分析有终点的
-        survival.colnames <- colnames(db.dat.cli())[grepl("months|status",colnames(db.dat.cli()))]
+        # survival.colnames <- colnames(db.dat.cli())[grepl("months|status",colnames(db.dat.cli()))]
         
+        # 本次过滤后应只有一条记录
+        temp.outcome.df <- study.df %>%
+          dplyr::filter(study_type %in% study_type_in) %>%
+          dplyr::filter(tumor_detail %in% cancer_detail_in) %>%
+          dplyr::filter(study_id %in% study_id_in )
+        # PFS/OS等生存终点
+        cli.tab.names <- toupper(unlist(strsplit(temp.outcome.df$outcome[1],split = "#",fixed = F)))
+        cli.tab.names <- cli.tab.names[which(cli.tab.names != '')] # os,pfs,...
+        
+        selected.colnames <- c(paste0(tolower(cli.tab.names),"_months"),paste0(tolower(cli.tab.names),"_status"))  # os_months,os_status,pfs_months,...
+        
+        # 免疫治疗相应终点: orr 和 clinical_benefit
+        if(study_type_in == 'ICIs'){
+          cli.resp.names <- intersect(c('orr','clinical_benefit'),unlist(strsplit(temp.outcome.df$clinical_property[1],split = "#",fixed = F)))
+          if(length(cli.resp.names) > 0){
+            cli.tab.names <- c(cli.tab.names,toupper(cli.resp.names)) # OS,PFS,...,ORR,CLINICAL_BENEFIT
+            selected.colnames <- c(selected.colnames,cli.resp.names) # os_months,os_status,pfs_months,...,orr,clinical_benefit
+            }
+        }
+        
+        clc.cli.km <- db.dat.cli()
+        # 免疫治疗队列过滤样本
+        if(study_type_in == 'ICIs'){
+          if(!is.null(biopsy_time)) {
+            clc.cli.km <- clc.cli.km %>%
+              dplyr::filter(ici_treatment_status %in% biopsy_time)
+          }
+          if(!is.null(ici_type)) {
+            clc.cli.km <- clc.cli.km %>%
+              dplyr::filter(str_detect(ici_treatment_type, paste0(ici_type,collapse = "|")))
+          }
+        }
+        
+        # for mutation
         if(data_type == 'Mutation'){
           # 临床样本与突变样本取交集
           tumor.samples <- intersect(db.dat()$sample_id,db.dat.cli()$sample_id)
-          grp1.df <- db.dat() %>%
-            dplyr::filter(hugo_symbol %in% symbol.name,
-                          variant_classification %in% input.vartype) %>%
-            dplyr::select(sample_id,hugo_symbol)
           
-          clc.cli <- db.dat.cli() %>%
+          if(gname == 'All Queried Genes'){
+            # 多个基因时
+            # browser()
+            if(km_logical_type == 'AND'){
+              # logical 为 AND 时
+              cat(cat_prefix_km,"- 逻辑AND选择多基因突变模式！\n")
+              # browser()
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype) %>%
+                dplyr::select(sample_id,hugo_symbol) %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count == length(symbol.name)) # 取
+            }
+            if(km_logical_type == 'OR'){
+              # logical 为 OR 时
+              cat(cat_prefix_km,"- 逻辑OR选择多基因突变模式！\n")
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype)  %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count >= 1) # 取
+            }
+            
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype) %>%
+              dplyr::filter(sample_id %in% tmp.mut.samples$sample_id) %>%
+              dplyr::select(sample_id,hugo_symbol)
+            
+            
+          }else{
+            # 单个基因时
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype) %>%
+              dplyr::select(sample_id,hugo_symbol)
+            
+          }
+          
+          clc.cli <- clc.cli.km %>%
             dplyr::filter(sample_id %in% tumor.samples) %>%
             dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','Wt'),levels = c('Wt','Mut'))) %>%
-            dplyr::select(sample_id,risk = Group,all_of(survival.colnames))
-          
+            dplyr::select(sample_id,risk = Group,all_of(selected.colnames))
         }
         # for expr
         if(data_type %in% c('Expr','Proteome')){
@@ -473,96 +656,67 @@ tab_01_survival_km$server <- function(input, output,session) {
             dplyr::filter(Group %in% c('Low','High')) %>%
             dplyr::select(sample_id,Group)
           grp1.df$Group <- factor(grp1.df$Group,levels = c('Low','High'))
-          clc.cli <- db.dat.cli() %>%
+          clc.cli <- clc.cli.km %>%
             dplyr::filter(sample_id %in% tumor.samples) %>%
             dplyr::inner_join(grp1.df,by='sample_id')  %>%
-            dplyr::select(sample_id,risk = Group,all_of(survival.colnames))
+            dplyr::select(sample_id,risk = Group,all_of(selected.colnames))
         }
         
-        # 根据临床属性定义输出的tab项
-        # cli.name1 <- cli.name2 <- cli.name3 <- ""
-        # if("TRUE" %in% grepl("pfs",survival.colnames))  cli.name1 <- 'PFS'
-        # if("TRUE" %in% grepl("dfs",survival.colnames))  cli.name2 <- 'DFS'
-        # if("TRUE" %in% grepl("os",survival.colnames))  cli.name3 <- 'OS'
-        # cli.tab.names <- c(cli.name1,cli.name2,cli.name3)
-        
-        # 本次过滤后应只有一条记录
-        temp.outcome.df <- study.df %>%
-          dplyr::filter(study_type %in% study_type_in) %>%
-          dplyr::filter(tumor_detail %in% cancer_detail_in) %>%
-          dplyr::filter(study_id %in% study_id_in )
-        cli.tab.names <- toupper(unlist(strsplit(temp.outcome.df$outcome[1],split = "#",fixed = F)))
-        # cat("=========>cli.tab.names:",cli.tab.names,"\n")
-        cli.tab.names <- cli.tab.names[which(cli.tab.names != '')]
-        
-        output[[paste0(gname,"_km")]] <- renderUI({
-          tabss <- lapply(cli.tab.names, function(cli.name) {
-            tabPanel(
-              style = "padding-top:15px",
-              title = paste0("Survival ",toupper(cli.name)), status = "primary", solidHeader = TRUE, collapsible = TRUE,
-              # shinycustomloader::withLoader(plotlyOutput(paste0(gname, "_plot_km_",tolower(cli.name)), height = "350px", width = "100%"),type = 'html',loader = 'loader2'),
-              # shinycssloaders::withSpinner(plotlyOutput(paste0(gname, "_plot_km_",tolower(cli.name)),height = "350px", width = "100%")),
-              shinycssloaders::withSpinner(plotOutput(paste0(gname, "_plot_km_",tolower(cli.name)),height = "350px", width = "100%")),
-              h5(HTML(paste("<span style=color:black;font-size:12px;>", "All Queries Genes: mutation of at least one of query genes. 
-                        Mut: mutation, Wt: wild type.\n Hazard ratio (HR) for mutant (Mut) versus wild-type (Wt)  was calculated by Cox regression.", "</span>"))),
-              downloadButton(paste0(gname, "_dlplotkm_",tolower(cli.name)), 
-                             tags$span(
-                               "DLGraph",
-                               add_prompt(tags$span(icon(name = "question-circle")),
-                                          message = "Save plot in a PDF file.", 
-                                          position = "left")),
-                             style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
-              downloadButton(paste0(gname, "_dltblkm_",tolower(cli.name)), 
-                             # "DLTable",
-                             tags$span(
-                               "DLTable",
-                               add_prompt(tags$span(icon(name = "question-circle")),
-                                          message = "Save data of survival plot in a txt file.", 
-                                          position = "left")),
-                             style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
-              br(),
-              DT::dataTableOutput(paste0(gname, "_tbl_km_",tolower(cli.name)))
-            )
-          })
-          do.call(tabsetPanel, tabss)
-        })
-        
-        # 绘KM图
-        lapply(cli.tab.names, function(cli.name) {
+        # 绘图: KM curve and stackplot
+        km.plot.list <- list()
+        km.tabl.list <- list()
+        for (cli.name in cli.tab.names) {
+          
           # cat("====>nrow(clc.cli)",nrow(clc.cli),"\n")
           # browser()
-          km.df <- clc.cli %>%
-            dplyr::mutate(row_id = seq(1,nrow(clc.cli))) %>%
-            dplyr::select(row_id,sample_id,
-                          times = paste0(tolower(cli.name),"_months"),
-                          status = paste0(tolower(cli.name),"_status"),
-                          risk)%>%
-            dplyr::mutate(times = round(as.numeric(times),2)) %>%
-            dplyr::filter(!is.na(times),status != '',!is.na(status))
           
-          output.graphic[[paste0(gname,"_",tolower(cli.name))]]$tbl <- km.df
-          
-          if(length(unique(km.df$risk)) == 1){
-            cat("基因 ",gname," 分组只有一组\n")
-            km.graphic <- ggsurvplot(survfit(Surv(times, status) ~ risk, 
-                                             data = km.df), 
-                                     data = km.df,
-                                     risk.table = T,
-                                     risk.table.pos = "out",
-                                     risk.table.y.text.col = T,
-                                     risk.table.y.text = TRUE,
-                                     ncensor.plot = F,
-                                     xlim = c(0, max(km.df$times)*1.1),
-                                     legend = "none",  # 取消图例，下面legend参数无效
-                                     legend.title = '',
-                                     color.dis = input.color[1],
-                                     break.time.by = time_break_survival(max(km.df$times,na.rm = T)))
+          # 生存分析
+          if(!is_in(tolower(cli.name),c('orr','clinical_benefit'))){
+            km.df <- clc.cli %>%
+              # dplyr::mutate(row_id = seq(1,nrow(clc.cli))) %>%
+              dplyr::select(sample_id,
+                            times = paste0(tolower(cli.name),"_months"),
+                            status = paste0(tolower(cli.name),"_status"),
+                            risk)%>%
+              dplyr::mutate(times = round(as.numeric(times),2)) %>%
+              dplyr::filter(!is.na(times),status != '',!is.na(status))
             
-            km.plotly <- km.graphic
-          }else{
-            km.graphic <- func.survivalplot(km.df,'',cli.name,
+            # output.graphic[[paste0(gname,"_",tolower(cli.name))]]$tbl <- km.df
+            
+            if(length(unique(km.df$risk)) == 1){
+              cat("基因 ",gname," 分组只有一组\n")
+              km.graphic <- ggsurvplot(survfit(Surv(times, status) ~ risk, 
+                                               data = km.df), 
+                                       data = km.df,
+                                       title = cli.name,
+                                       risk.table = T,
+                                       risk.table.pos = "out",
+                                       risk.table.y.text.col = T,
+                                       risk.table.y.text = TRUE,
+                                       ncensor.plot = F,
+                                       xlim = c(0, max(km.df$times)*1.1),
+                                       legend = "none",  # 取消图例，下面legend参数无效
+                                       legend.title = '',
+                                       color.dis = input.color[1],
+                                       break.time.by = time_break_survival(max(km.df$times,na.rm = T)))
+              
+              km.plotly <- km.graphic
+            }else{
+              km.graphic <- func.survivalplot(plotdata = km.df,
+                                              kw.title = cli.name,
+                                              time.break = time_break_survival(max(km.df$times,na.rm = T)),
+                                              key.stye = cli.name,
+                                              tbl.loc = input.tbl.loc, # km_tbl_loc
+                                              color.dis = input.color,
+                                              y.title = case_when(cli.name == 'PFS' ~ 'Progression-free Survival',
+                                                                  cli.name == 'DFS' ~ 'Disease-free Survival',
+                                                                  cli.name == 'PFI' ~ 'Progression-free Interval',
+                                                                  cli.name == 'DFI' ~ 'Disease-free Interal',
+                                                                  cli.name == 'DSS' ~ 'Disease-specific Survival',
+                                                                  cli.name == 'OS' ~ 'Overall Survival',
+                                                                  TRUE ~ 'Survival'))
+              km.plotly <-  plotly_survival(km.df,'',
                                             time.break = time_break_survival(max(km.df$times,na.rm = T)),
-                                            tbl.loc = 'topright',
                                             color.dis = input.color,
                                             y.title = case_when(cli.name == 'PFS' ~ 'Progression-free Survival',
                                                                 cli.name == 'DFS' ~ 'Disease-free Survival',
@@ -571,190 +725,242 @@ tab_01_survival_km$server <- function(input, output,session) {
                                                                 cli.name == 'DSS' ~ 'Disease-specific Survival',
                                                                 cli.name == 'OS' ~ 'Overall Survival',
                                                                 TRUE ~ 'Survival'))
-            km.plotly <-  plotly_survival(km.df,'',
-                                          time.break = time_break_survival(max(km.df$times,na.rm = T)),
-                                          color.dis = input.color,
-                                          y.title = case_when(cli.name == 'PFS' ~ 'Progression-free Survival',
-                                                              cli.name == 'DFS' ~ 'Disease-free Survival',
-                                                              cli.name == 'PFI' ~ 'Progression-free Interval',
-                                                              cli.name == 'DFI' ~ 'Disease-free Interal',
-                                                              cli.name == 'DSS' ~ 'Disease-specific Survival',
-                                                              cli.name == 'OS' ~ 'Overall Survival',
-                                                              TRUE ~ 'Survival'))
+              
+              
+            }
+            # 执行完绘图， 更新数据列名为当前分析因素
+            colnames(km.df) <- c("sample_id", cli.name, paste0(cli.name,".event"), gname)
+            km.graphic <- plot_grid(km.graphic$plot + 
+                                      theme(plot.title = element_text(hjust = 0,face = "bold")),
+                                    km.graphic$table,nrow = 2,rel_heights = c(1,0.3))
+          }
+          # 响应分析
+          if(tolower(cli.name) %in% c('orr','clinical_benefit')){
+            if(tolower(cli.name) == 'orr'){
+              km.df <- clc.cli %>%
+                dplyr::select(sample_id,
+                              resp = tolower(cli.name),
+                              risk)%>%
+                dplyr::filter(resp %in% c('PD','SD','PR','CR')) %>%
+                dplyr::mutate(resp =factor(resp,levels = c('PD','SD','PR','CR'))) 
+              legendTitle <- "ORR"
+            }
+            if(tolower(cli.name) == 'clinical_benefit'){
+              km.df <- clc.cli %>%
+                dplyr::select(sample_id,
+                              resp = tolower(cli.name),
+                              risk)%>%
+                dplyr::filter(resp %in% c('NDB','DCB'))  %>%
+                dplyr::mutate(resp =factor(resp,levels = c('NDB','DCB')))
+              legendTitle <- "Clinical\nBenefit"
+            }
             
+            # browser()
+            # if(length(unique(km.df$risk)) == 1){
+            #   cat("基因 ",gname," 分组只有一组\n")
+            #   km.graphic <- ggbarstats(
+            #     data = km.df,
+            #     x = resp,
+            #     y = risk,
+            #     type = 'nonparametric',
+            #     label = 'counts',
+            #     proportion.test = NULL,
+            #     title = cli.name,
+            #     legend.title = legendTitle,
+            #     xlab = ''
+            #   )
+            #     
+            # }else{
+              # 关于结果值的解释
+              # https://yuzar-blog.netlify.app/posts/2021-12-14-how-to-conduct-chi-square-test-in-r/
+            #   km.graphic <- ggbarstats(
+            #     data = km.df,
+            #     x = resp,
+            #     y = risk,
+            #     type = 'nonparametric',
+            #     label = 'counts',
+            #     proportion.test = NULL,
+            #     title = cli.name,
+            #     legend.title = legendTitle,
+            #     xlab = ''
+            #   ) 
+            # }
+            # 调整legend的titile名称
+            # km.graphic <- km.graphic +
+            #   theme(axis.text = element_text(face = 'bold',size = 12))
+            # km.graphic <- as.ggplot(km.graphic)
+            
+            km.plot.xtbl <- table(km.df$risk,km.df$resp)
+            km.plot.pvalue <- chisq.test(km.plot.xtbl)$p.value
+            
+            km.chiq.df <- km.df %>%
+              dplyr::group_by(xname = risk,yname = resp) %>%
+              dplyr::summarise(countvalue = n())
+            
+            km.graphic <- func.stackplot(km.chiq.df,
+                                         title = cli.name,
+                                         legendTitle = legendTitle,
+                                         p.value = km.plot.pvalue,
+                                         pvalue.xloc = 1.3,
+                                         color.sets = sample(brewer.pal(n = 12, name = "Set3"),
+                                                               length(unique(km.df$resp))))
+            
+            # 执行完绘图， 更新数据列名为当前分析因素
+            colnames(km.df) <- c("sample_id", cli.name, gname)
             
           }
-          output.graphic[[paste0(gname,"_",tolower(cli.name))]]$km <- km.graphic
-
+          
+          output.graphic[[paste0(gname,"_",tolower(cli.name))]]$tbl <- km.df
+          output.graphic[[paste0(gname,"_",tolower(cli.name))]]$kmplot <- km.graphic
+          # browser()
+          km.plot.list[[cli.name]] <- km.graphic
+          km.tabl.list[[cli.name]] <- km.df
+          
           # output[[paste0(gname, "_plot_km_",tolower(cli.name))]] <- renderPlotly({
           #   ggplotly(km.plotly[[1]])
           # })
-          output[[paste0(gname, "_plot_km_",tolower(cli.name))]] <- renderPlot({
-            print(km.graphic)
+          
+          # output[[paste0(gname, "_plot_km_",tolower(cli.name))]] <- renderPlot({
+          #   print(km.graphic)
+          # })
+          # output[[paste0(gname, "_tbl_km_",tolower(cli.name))]] <- renderDataTable({
+          #   datatable(km.df, 
+          #             style = 'bootstrap', 
+          #             rownames = FALSE, 
+          #             selection = list(mode = "single", target = "row"),
+          #             options = list(orderClasses = TRUE,keys = TRUE,dom = 'Bfrtip', searching = F,
+          #                            language = list(zeroRecords = "No records found matching your selection"),
+          #                            columnDefs = list(list(className = 'dt-center', targets = '_all')))
+          #             )
+          # })
+          # output[[paste0(gname, "_dlplotkm_",tolower(cli.name))]] <- downloadHandler(
+          #   filename = function() {
+          #     if(grepl("#",gname)) gname <- "Comb"
+          #     paste0(prefix_output_file,"_KM_Plot_",toupper(cli.name),"_",gname,"_",Sys.Date(),".pdf", sep = "")
+          #   },
+          #   content = function(file) {
+          #     pdf(file,onefile = F, width = 6, height = 4, pointsize = 10)
+          #     print(output.graphic[[paste0(gname,"_",tolower(cli.name))]]$kmplot)
+          #     dev.off()
+          #   }
+          # )
+          # output[[paste0(gname, "_dltblkm_",tolower(cli.name))]] <- downloadHandler(
+          #   filename = function() {
+          #     paste0(prefix_output_file,"_KM_Data_",toupper(cli.name),"_",gname,"_",Sys.Date(), '.txt', sep='')
+          #   },
+          #   content = function(file) {
+          #     readr::write_delim(x = output.graphic[[paste0(gname,"_",tolower(cli.name))]]$tbl, path = file, delim = "\t")
+          #   }
+          # )
+        # })
+        }
+        # 整合当前输出图表
+        {
+          # browser()
+          # 图
+          survival.cli.names <- intersect(toupper(names(km.plot.list)),c("OS","PFS","PFI","DFI",'DFS','DSS'))
+          survival.cli.names.length = length(survival.cli.names) # 不会超过4
+          
+          n.col <- min(5,length(km.plot.list))
+          n.row <- max(1,ceiling(length(km.plot.list)/n.col))
+          o.widths <- 600*survival.cli.names.length + 400 * (n.col-survival.cli.names.length)
+          out.plot <- ggarrange(plotlist = km.plot.list,
+                             ncol = n.col,
+                             nrow = n.row,
+                             # labels = names(km.plot.list),
+                             widths = o.widths,
+                             heights = 400 * n.row )
+          output.width <- o.widths
+          output.height <- 400 * n.row
+          
+          # 表
+          tabl.names <- names(km.tabl.list)
+          out.tabl <- km.tabl.list[[tabl.names[1]]]
+          if(length(tabl.names)>1){
+            for (i in c(2:length(km.tabl.list))) {
+              tmp.tabl<- km.tabl.list[[tabl.names[i]]]
+              out.tabl <- out.tabl  %>%
+                dplyr::full_join(tmp.tabl %>%
+                                   dplyr::select(-gname),by='sample_id') %>%
+                dplyr::select(sample_id,gname,everything())
+            }
+          }
+          
+          output.graphic[[paste0(gname,"_km_tabl")]]$tbl <- out.tabl
+          output.graphic[[paste0(gname,"_km_plot")]]$kmplot <- out.plot
+      }
+      {
+        output[[paste0(gname,"_km")]] <- renderUI({
+          tagList(
+            shinycssloaders::withSpinner(plotOutput(paste0(gname, "_km_plot"),height = 400 * n.row,width = 'auto')),
+            h5(HTML(paste("<span style=color:black;font-size:12px;>", "All Queried Genes: mutation of at least one of query genes. 
+                          Mut: mutation, Wt: wild type.\n Hazard ratio (HR) for mutant (Mut) versus wild-type (Wt)  was calculated by Cox regression.", "</span>"))),
+            downloadButton(paste0(gname, "_km_plot_dl"),
+                           tags$span(
+                             "DLGraph",
+                             add_prompt(tags$span(icon(name = "circle-question")),
+                                        message = "Save plot in a pdf file.",
+                                        position = "left")),
+                           style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
+            downloadButton(paste0(gname, "_km_tabl_dl"),
+                           tags$span(
+                             "DLTable",
+                             add_prompt(tags$span(icon(name = "circle-question")),
+                                        message = "Save data of plot in a txt file.",
+                                        position = "left")),
+                           style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),  
+            br(),
+            DT::dataTableOutput(paste0(gname, "_km_tabl"))
+          )
+          
+        })
+        
+          # 图输出到页面
+          output[[paste0(gname,"_km_plot")]] <- renderPlot({
+            print(out.plot)
           })
-          output[[paste0(gname, "_tbl_km_",tolower(cli.name))]] <- renderDataTable({
-            datatable(km.df, 
+          
+          # 表输出到页面
+          output[[paste0(gname,"_km_tabl")]] <- renderDataTable({
+            datatable(out.tabl, 
                       style = 'bootstrap', 
                       rownames = FALSE, 
                       selection = list(mode = "single", target = "row"),
                       options = list(orderClasses = TRUE,keys = TRUE,dom = 'Bfrtip', searching = F,
                                      language = list(zeroRecords = "No records found matching your selection"),
                                      columnDefs = list(list(className = 'dt-center', targets = '_all'))),
-                      colnames = c("Row ID","Sample ID", cli.name, paste0(cli.name,".event"), gname)
-                      )
+                      colnames = c("Sample ID", colnames(out.tabl)[-1])
+            )
           })
-          output[[paste0(gname, "_dlplotkm_",tolower(cli.name))]] <- downloadHandler(
+          
+          # 下载图
+          output[[paste0(gname, "_km_plot_dl")]] <- downloadHandler(
             filename = function() {
               if(grepl("#",gname)) gname <- "Comb"
-              paste0(prefix_output_file,"_KM_Plot_",toupper(cli.name),"_",gname,"_",Sys.Date(),".pdf", sep = "")
+              paste0(prefix_output_file,"_KM_Plot_",gname,"_",Sys.Date(),".pdf", sep = "")
             },
             content = function(file) {
-              pdf(file,onefile = F, width = 6, height = 4, pointsize = 10)
-              print(output.graphic[[paste0(gname,"_",tolower(cli.name))]]$km)
+              pdf(file,onefile = F, width = (output.width/100)*0.8, height = output.height/100, pointsize = 10)
+              print(output.graphic[[paste0(gname,"_km_plot")]]$kmplot)
               dev.off()
             }
           )
-          output[[paste0(gname, "_dltblkm_",tolower(cli.name))]] <- downloadHandler(
+          # 下载表
+          output[[paste0(gname, "_km_tabl_dl")]] <- downloadHandler(
             filename = function() {
-              paste0(prefix_output_file,"_KM_Data_",toupper(cli.name),"_",gname,"_",Sys.Date(), '.txt', sep='')
+              paste0(prefix_output_file,"_KM_Data_",gname,"_",Sys.Date(), '.txt', sep='')
             },
             content = function(file) {
-              readr::write_delim(x = output.graphic[[paste0(gname,"_",tolower(cli.name))]]$tbl, path = file, delim = "\t")
+              readr::write_delim(x = output.graphic[[paste0(gname,"_km_tabl")]]$tbl, path = file, delim = "\t")
             }
           )
-        })
-        # Increment the progress bar, and update the detail text.
-        # incProgress(1/n, detail = paste("Analyzing gene: ", gname))
-        Sys.sleep(0.01)
-        # if("pfs_months" %in% colnames(clc.cli)) {
-        #   km.pfs.df <- clc.cli %>%
-        #     dplyr::select(sample_id,times = pfs_months,status = pfs_status,risk)%>%
-        #     dplyr::mutate(times = round(as.numeric(times),2)) %>%
-        #     dplyr::filter(!is.na(times),status != '')
-        #   output.graphic[[gname]]$tbl.pfs <- km.pfs.df
-        #   km.graphic <- func.survivalplot(km.pfs.df,'','PFS',time.break = time_break_survival(max(km.pfs.df$times,na.rm = T)),
-        #                              tbl.loc = 'topright',
-        #                              color.dis = input.color,y.title = 'Progression-free Survival')
-        #   output.graphic[[gname]]$km.pfs <- km.graphic
-        #   km.pfs.plotly <-  plotly_survival(km.pfs.df,'',time.break = time_break_survival(max(km.pfs.df$times,na.rm = T)),color.dis = input.color,y.title = 'Progression-free Survival')
-        #   
-        #   
-        #   output[[paste0(gname, "_sur_pfs")]] <- renderPlotly({
-        #     ggplotly(km.pfs.plotly[[1]])
-        #   })
-        #   output[[paste0(gname, "_tbl_pfs")]] <- renderDataTable({
-        #     datatable(km.pfs.df, style = 'bootstrap', rownames = FALSE, options = list(orderClasses = TRUE,dom = 'tp', language = list(
-        #       zeroRecords = "No records found matching your selection")), 
-        #       colnames = c("Sample_ID", "Times", "Status", gname))
-        #   })
-        #   output[[paste0(gname, "_dl_pfs")]] <- downloadHandler(
-        #     filename = function() {
-        #       if(grepl("#",gname)) gname <- "Comb"
-        #       paste("km_pfs_",gname,"_",Sys.Date(),".pdf", sep = "")
-        #     },
-        #     content = function(file) {
-        #       pdf(file,onefile = F, width = 6, height = 4, pointsize = 10)
-        #       print(output.graphic[[gname]]$km.pfs)
-        #       dev.off()
-        #     }
-        #   )
-        #   output[[paste0(gname, "_dltbl_pfs")]] <- downloadHandler(
-        #     filename = function() {
-        #       paste("data_pfs_",gname,"_",Sys.Date(), '.txt', sep='')
-        #     },
-        #     content = function(file) {
-        #       readr::write_delim(x = output.graphic[[gname]]$tbl.pfs, path = file, delim = "\t")
-        #     }
-        #   )
-        # }
-        # if("os_months" %in% colnames(clc.cli)) {
-        #   km.os.df <- clc.cli %>%
-        #     dplyr::select(sample_id,times = os_months,status = os_status,risk) %>%
-        #     dplyr::mutate(times = round(as.numeric(times),2)) %>%
-        #     dplyr::filter(!is.na(times),status != '')
-        #   output.graphic[[gname]]$tbl.os <- km.os.df
-        #   km.graphic <- func.survivalplot(km.os.df,'','OS',time.break = time_break_survival(max(km.os.df$times,na.rm = T)),
-        #                              tbl.loc = 'topright',
-        #                              color.dis = input.color,y.title = 'Overall Survival')
-        #   output.graphic[[gname]]$km.os <- km.graphic
-        #   km.os.plotly <-  plotly_survival(km.os.df,'',time.break = time_break_survival(max(km.os.df$times,na.rm = T)),color.dis = input.color,y.title = 'Overall Survival')
-        #   # output[[paste0(gname, "_sur_os")]] <- renderPlot({
-        #   #   km.graphic
-        #   # })
-        #   output[[paste0(gname, "_sur_os")]] <- renderPlotly({
-        #     ggplotly(km.os.plotly[[1]])
-        #   })
-        #   output[[paste0(gname, "_tbl_os")]] <- renderDataTable({
-        #     datatable(km.os.df, style = 'bootstrap', rownames = FALSE, options = list(orderClasses = TRUE,dom = 'tp', language = list(
-        #       zeroRecords = "No records found matching your selection")), 
-        #       colnames = c("Sample_ID", "Times", "Status", gname))
-        #   })
-        #   output[[paste0(gname, "_dl_os")]] <- downloadHandler(
-        #     filename = function() {
-        #       if(grepl("#",gname)) gname <- "Comb"
-        #       paste("km_os_",gname,"_",Sys.Date(),".pdf", sep = "")
-        #     },
-        #     content = function(file) {
-        #       pdf(file,onefile = F, width = 6, height = 4, pointsize = 10)
-        #       print(output.graphic[[gname]]$km.os)
-        #       dev.off()
-        #     }
-        #   )
-        #   output[[paste0(gname, "_dltbl_os")]] <- downloadHandler(
-        #     filename = function() {
-        #       paste("data_os_",gname,"_",Sys.Date(), '.txt', sep='')
-        #     },
-        #     content = function(file) {
-        #       readr::write_delim(x = output.graphic[[gname]]$tbl.os, path = file, delim = "\t")
-        #     }
-        #   )
-        # }
-        # if("dfs_months" %in% colnames(clc.cli)) {
-        #   km.dfs.df <- clc.cli %>%
-        #     dplyr::select(sample_id,times = dfs_months,status = dfs_status,risk)%>%
-        #     dplyr::mutate(times = round(as.numeric(times),2)) %>%
-        #     dplyr::filter(!is.na(times),status != '')
-        #   output.graphic[[gname]]$tbl.dfs <- km.dfs.df
-        #   km.graphic <- func.survivalplot(km.dfs.df,'','DFS',time.break = time_break_survival(max(km.dfs.df$times,na.rm = T)),
-        #                              tbl.loc = 'topright',
-        #                              color.dis = input.color,y.title = 'Disease-free Survival')
-        #   output.graphic[[gname]]$km.dfs <- km.graphic
-        #   km.dfs.plotly <-  plotly_survival(km.dfs.df,'',time.break = time_break_survival(max(km.dfs.df$times,na.rm = T)),color.dis = input.color,y.title = 'Progression-free Survival')
-        #   output[[paste0(gname, "_sur_dfs")]] <- renderPlotly({
-        #     ggplotly(km.dfs.plotly[[1]])
-        #   })
-        #   output[[paste0(gname, "_tbl_dfs")]] <- renderDataTable({
-        #     datatable(km.dfs.df, style = 'bootstrap', rownames = FALSE, options = list(orderClasses = TRUE,dom = 'tp', language = list(
-        #       zeroRecords = "No records found matching your selection")), 
-        #       colnames = c("Sample_ID", "Times", "Status", gname))
-        #   })
-        #   output[[paste0(gname, "_dl_dfs")]] <- downloadHandler(
-        #     filename = function() {
-        #       if(grepl("#",gname)) gname <- "Comb"
-        #       paste("km_dfs_",gname,"_", Sys.Date(),".pdf", sep = "")
-        #     },
-        #     content = function(file) {
-        #       pdf(file,onefile = F, width = 6, height = 4, pointsize = 10)
-        #       print(output.graphic[[gname]]$km.dfs)
-        #       dev.off()
-        #     }
-        #   )
-        #   output[[paste0(gname, "_dltbl_dfs")]] <- downloadHandler(
-        #     filename = function() {
-        #       paste('data_dfs_',gname,"_", Sys.Date(), '.txt', sep='')
-        #     },
-        #     content = function(file) {
-        #       readr::write_delim(x = output.graphic[[gname]]$tbl.dfs, path = file, delim = "\t")
-        #     }
-        #   )
-        # }
+        }
         
+        
+        Sys.sleep(0.01)
         
       })
       remove_modal_progress()
-      # Pause for 0.1 seconds to simulate a long computation.
-    #   Sys.sleep(0.1)
-    # })
   })
   
   

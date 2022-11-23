@@ -65,7 +65,7 @@ tab_05_data_resource$server <- function(input, output,session) {
     # dplyr::filter(study_source != 'TCGA') %>% # TCGA数据源不提供下载入口
     dplyr::arrange(study_type,desc(study_source),study_id) %>%
     dplyr::mutate(study_type = ifelse(study_type == 'ICIs','ICIs Cohort','non ICIs Cohort')) %>%
-    dplyr::select(study_type,study_source,study_id,platfrom,tumor_detail,sample_size,data_type,pmid) 
+    dplyr::select(study_type,study_source,study_id,genomic_platform,tumor_detail,sample_size,data_type,pmid) 
   # 为方便根据关键词（study_id，data_type等）下载数据，且避免hyperlink，因此新建一个有hyperlink的对象用于前端展示
   # 要求data.dis 和 data.out的列信息和行顺序一致（在data.dis不可以有行过滤）
   data.dis <- data.out %>%
@@ -75,9 +75,9 @@ tab_05_data_resource$server <- function(input, output,session) {
     dplyr::mutate(study_id = ifelse(startsWith(study_id,"GSE"),
                                     paste0("<a href=\"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", tolower(study_id),"\" target=\"_blank\">", study_id,"</a>"),
                                     study_id)) %>% # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=gse13213
-    dplyr::mutate(platfrom = ifelse(startsWith(platfrom,"GPL"),
-                                    paste0("<a href=\"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", tolower(platfrom),"\" target=\"_blank\">", platfrom,"</a>"),
-                                    platfrom)) %>%  # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL6480
+    dplyr::mutate(genomic_platform = ifelse(startsWith(genomic_platform,"GPL"),
+                                    paste0("<a href=\"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", tolower(genomic_platform),"\" target=\"_blank\">", genomic_platform,"</a>"),
+                                    genomic_platform)) %>%  # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL6480
     dplyr::mutate(Actions = ifelse(study_source %in% c('In-house'),"Contact Author",
                                    ifelse(study_source %in% c('TCGA'),
                                           paste0('<a href=\"https://portal.gdc.cancer.gov/\" target=\"_blank\">', 'GDC Data Portal','</a>'),
@@ -120,7 +120,7 @@ tab_05_data_resource$server <- function(input, output,session) {
                    lengthMenu=c(3,5,10)
                    # buttons = I('colvis')  # 列显示控制
                    ),
-    colnames = c("Cohort Type","Source","Cohort ID", 'Platfrom','Cancer','Sample Size','Data Type','PMID'
+    colnames = c("Cohort Type","Source","Cohort ID", 'Platform','Cancer','Sample Size','Data Type','PMID'
                  ,'Actions'  # 隐藏下载功能
                  )
     )

@@ -16,7 +16,7 @@ cat_prefix_tme_comp <- 'TME-Comp'
 sidebar <- sidebarPanel(
   id = 'comp_sidebar',
   width = 3,
-  h3("TME Comparative Analyses"),
+  h3("TME Comparative Analysis"),
   # 研究类型
   awesomeRadio(inputId = "comp_study_type",
                label = "Select study types", 
@@ -38,6 +38,7 @@ sidebar <- sidebarPanel(
                                choices = NULL,
                                multiple = FALSE,
                                selected = NULL)),
+  tags$hr(style="border-color: purple;"),
   conditionalPanel('input.comp_study_id != ""',
                    # 队列数据的基因list
                    selectizeInput(inputId = "comp_symbol_id", 
@@ -53,7 +54,7 @@ sidebar <- sidebarPanel(
   fluidRow(
     column(6,numericInput(inputId = "comp_exprcut1_id",
                           label = tags$span(
-                            add_prompt(tags$span(icon(name = "question-circle")),
+                            add_prompt(tags$span(icon(name = "circle-question")),
                                        message = "Percentile threshold for RNA data", 
                                        position = "right"),
                             "Percentile cutoff (%,High):"),
@@ -66,11 +67,18 @@ sidebar <- sidebarPanel(
                           min = 0,
                           max = 100,step = NA,width = '100%'))
   ),
+  # 基因类型：RNA,Protein,Methyl
+  pickerInput("comp_gene_type",
+              label = 'Immunomodulator/Signature Type:', 
+              choices = NULL,
+              selected = NULL, 
+              multiple = FALSE),
+  
   # 分组颜色
   fluidRow(
     column(6,colourpicker::colourInput(inputId = "comp_colorg1_id", 
                                        label = tags$span(
-                                         add_prompt(tags$span(icon(name = "question-circle")),
+                                         add_prompt(tags$span(icon(name = "circle-question")),
                                                     message = "Color for positive correlation", 
                                                     position = "right"),
                                          'Color 1'), 
@@ -83,7 +91,7 @@ sidebar <- sidebarPanel(
                                        returnName = TRUE)),
     column(5,colourpicker::colourInput(inputId = "comp_colorg2_id", 
                                        label = tags$span(
-                                         add_prompt(tags$span(icon(name = "question-circle")),
+                                         add_prompt(tags$span(icon(name = "circle-question")),
                                                     message = "Color for nagative correlation", 
                                                     position = "right"),
                                          'Color 2'),  
@@ -95,16 +103,22 @@ sidebar <- sidebarPanel(
                                        # transparentText, 
                                        returnName = TRUE))
     ),
-  # 基因类型：RNA,Protein,Methyl
-  pickerInput("comp_gene_type",
-              label = 'Immunomodulator/Signature Type:', 
-              choices = NULL,
-              selected = NULL, 
-              multiple = FALSE),
   # 提交按钮
-  actionButton(inputId = "comp_goButton",
-               label = "Submit",
-               class ="btn-primary")
+  # actionButton(inputId = "comp_goButton",
+  #              label = "Submit",
+  #              class ="btn-primary")
+  fluidRow(
+    column(2, 
+           div(style="display:inline-block",actionButton(inputId = "comp_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
+    ),
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_comp", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
+  )
+  
   
 )
 
@@ -120,6 +134,13 @@ tab_03_tme_comp$server <- function(input, output,session) {
   cat("========================= Start Comparative ======================\n")
   # 定义变量存储输出对象
   output.graphic <- reactiveValues()
+  
+  observeEvent(input[['reset_input_comp']], {
+    shinyjs::reset("comp_sidebar")
+  })
+  observeEvent(input$reset_input_comp, {
+    output[['comp_maintabs']] <- NULL
+  })
   
   # 0.根据队列类型（ICI或非ICI队列）从数据库获取肿瘤名称名称
   tumor.names.df <- eventReactive(input$comp_study_type,{
@@ -287,6 +308,10 @@ tab_03_tme_comp$server <- function(input, output,session) {
                       selected = db_choices[[1]][[1]])
   })
   
+  observe({
+    shinyjs::toggleState("comp_goButton", 
+                         !is.null(input$comp_symbol_id) && input$comp_symbol_id != "" )
+  })
   
   # 重置输入
   # observeEvent(input$comp_reset, {
@@ -331,6 +356,16 @@ tab_03_tme_comp$server <- function(input, output,session) {
                               return(temp.df)
                             })
   
+  # 输入为空验证
+  iv_comp <- InputValidator$new()
+  iv_comp$add_rule("comp_symbol_id", sv_required())
+  iv_comp$add_rule("comp_gene_type", sv_required())
+  iv_comp$add_rule("comp_exprcut1_id", sv_gt(9))
+  iv_comp$add_rule("comp_exprcut1_id", sv_lt(91))
+  iv_comp$add_rule("comp_exprcut2_id", sv_gt(9))
+  iv_comp$add_rule("comp_exprcut2_id", sv_lt(91))
+  iv_comp$enable()
+  
   # 业务层：KM分析
   observeEvent(input$comp_goButton,{
     cat("===================== Server Comparative =======================\n")
@@ -339,7 +374,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
       trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting Comparative Computation..."
+      text = "Starting comparative analysis ..."
     )
     selected_study_id = input$comp_study_id
     selected_tumor_detail_id = input$comp_cancer_detail
@@ -429,7 +464,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
         #     dplyr::select(sample_id,hugo_symbol)
         #   clc.cli <- db.dat.cli() %>%
         #     dplyr::filter(sample_id %in% tumor.samples) %>%
-        #     dplyr::mutate(group = ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','Wt')) %>%
+        #     dplyr::mutate(group = ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','WT')) %>%
         #     # 本处给突变类型时，初始化为一个很大的值，但后续绘图时，突变数据只绘制蜂群图，不绘制相关系数图
         #     dplyr::mutate(sltgene = 100000) %>%
         #     dplyr::select(sample_id,group,sltgene,all_of(temp.immunogenicities))
@@ -477,6 +512,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
               dplyr::filter(hugo_symbol %in% tme.df$symbol) %>%
               tibble::column_to_rownames(var = 'hugo_symbol') %>%
               t() %>% as.data.frame() 
+            legend.title <- 'Expr'
           }else{
             # 提取基因的表达谱，计算ssGSEAscore
             cell.sets <- split(tme.df$gene,       # gene
@@ -495,6 +531,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
             
             dat.y <- ssgsea.df %>% # ssgsea.df：行为细胞，列为样本
               t() %>% as.data.frame() 
+            legend.title <- 'ssGSEA score'
           }
           # 计算相关系数
           corr.df <- psych::corr.test(dat.x,dat.y,method = 'spearman',adjust = 'fdr')
@@ -524,14 +561,14 @@ tab_03_tme_comp$server <- function(input, output,session) {
             downloadButton(paste0(gname, "_dl_plot_comp_",tolower(cli.name)), 
                            tags$span(
                              "DLGraph",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save plot in a PDF file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
             downloadButton(paste0(gname, "_dl_tbl_comp_",tolower(cli.name)), 
                            tags$span(
                              "DLTable",
-                             add_prompt(tags$span(icon(name = "question-circle")),
+                             add_prompt(tags$span(icon(name = "circle-question")),
                                         message = "Save data of heatmap plot in a txt file.", 
                                         position = "left")),
                            style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
@@ -642,7 +679,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
                                  cluster_columns = F,
                                  cluster_rows = F,
                                  use_raster = F, # 样本数超过了2k，所以定义为F
-                                 name = "Expr",
+                                 name = legend.title,
                                  # column_split = col.ano$group,
                                  col = col_fun,
                                  row_names_gp = grid::gpar(fontsize = 8),
@@ -665,7 +702,7 @@ tab_03_tme_comp$server <- function(input, output,session) {
                                  cluster_columns = F,
                                  cluster_rows = F,
                                  use_raster = F, # 样本数超过了2k，所以定义为F
-                                 name = "Expr",
+                                 name = legend.title,
                                  # column_split = col.ano$group,
                                  col = col_fun,
                                  row_names_gp = grid::gpar(fontsize = 8),

@@ -1,31 +1,34 @@
 ---
 title: "Tutorial"
-author: "Yuchen Liao"
-date: "6/28/2022"
+author: "Wenchuan Xie"
+date: "2022-10-09"
 output: html_document
 runtime: shiny
 ---
 
 
-## User guide and tutorial
+## IMPACT User Guide
 
-<span style="color:black;">**IMPACT**</span> is a web-based platform for the exploration of <span style="color:black;text-decoration: underline;">**IM**</span>munotherapeutic <span style="color:black;text-decoration: underline;">**P**</span>redictive <span style="color:black;text-decoration: underline;">**A**</span>nd <span style="color:black;text-decoration: underline;">**C**</span>ancer prognos<span style="color:black;text-decoration: underline;">**T**</span>ic biomarkers using genomic, transcriptomic and proteomics datasets from in-house, literature and public databases (TCGA, CPTAC, ICGC, GEO). IMPACT provides versatile functions for analyses about predictive and prognostic biomarkers , including survival analysis, cox regression, subgroup analysis, interaction analysis, tumor mutational landscape analysis, immunogenicity analysis, tumor microenvironment (TME) correlation analysis, and TME comparative analysis. All the generated figures and raw data are freely available to the broad research community (accessibility of in-house data may need further requests). Different functions can be accessed via the menu bar (the green strip as shown below) at the top of the webpage. Detailed function description and tutorial are as follows:
+<span style="color:black;">**IMPACT**</span> is a web-based platform for the exploration of <span style="color:black;text-decoration: underline;">**IM**</span>munotherapeutic <span style="color:black;text-decoration: underline;">**P**</span>redictive <span style="color:black;text-decoration: underline;">**A**</span>nd <span style="color:black;text-decoration: underline;">**C**</span>ancer prognos<span style="color:black;text-decoration: underline;">**T**</span>ic biomarkers using genomic, transcriptomic and proteomics datasets from in-house, literature and public databases (TCGA, CPTAC, ICGC, GEO, OncoSG). IMPACT provides versatile functions for exploring predictive and prognostic biomarkers, including PredExplore, ProgExplore, Survival Analysis, Cox Regression, Subgroup Analysis, Cutpoint Analysis, Immunotherapy Response, Interaction Analysis, Immunogenicity Analysis, tumor microenvironment (TME) Correlation Analysis, TME Comparative Analysis, Mutation Profiles and User-defined function. Raw data and generated figures are available to research communities free of charge (accessibility of in-house data may need further requests). Different functions can be accessed via the menu bar at the top of the webpage. 
 
-![Home](tutorial-0.png)
+Detailed function description and tutorial are as follows:
 
+<!-- <img alt="Home" title="Home" src="tutorial-0.png" style="margin-left:auto;margin-right:auto;margin-bottom:10px;vertical-align:left;width:60%"> -->
 
 <!--
 * [User guide and tutorial](#guide) -->
 + [PredExplore: Immunotherapy Predictive Biomarkers Exploration](#predexplore)
 + [ProgExplore: Cancer Prognostic Biomarkers Exploration](#progexplore)
-+ [Survival analysis: Kaplan-Meier Curve](#kmcurve)
-+ [Survival analysis: Cox regression](#cox)
-+ [Survival analysis: Subgroup Analyses](#subgroup)
-+ [Interaction Analyses](#interaction)
-+ [Immunogenicity Analyses](#immunogenicity)
-+ [Tumor microenvironment: TME Correlation Analyses](#tme_corr)
-+ [Tumor microenvironment: TME Comparative Analyses](#tme_comp)
-+ [MutationProfiles](#mutationprofile)
++ [Survival Analysis: Kaplan-Meier Curve](#kmcurve)
++ [Survival Analysis: Cox Regression](#cox)
++ [Survival Analysis: Subgroup Analysis](#subgroup)
++ [Survival Analysis: Cutpoint Analysis](#cutpoint)
++ [Survival Analysis: Immunotherapy Response](#response)
++ [Interaction Analysis](#interaction)
++ [Immunogenicity Analysis](#immunogenicity)
++ [TME Analysis: TME Correlation Analysis](#tme_corr)
++ [TME Analysis: TME Comparative Analysis](#tme_comp)
++ [Mutation Profiles](#mutationprofile)
 + [Data availability](#data)
 
 <!-- 注释
@@ -39,13 +42,22 @@ knitr::opts_chunk$set(echo = TRUE)
 <a name="predexplore"> </a>
 ### PredExplore: Immunotherapy Predictive Biomarkers Exploration
 
-PredExplore allows users to explore the value of interested genes as immunotherapy biomarkers across multiple cohorts. Here, we included 18 cohorts of 11 cancer types. As shown in **Figure 1a** and **1b**, users need to fill in the gene symbols of interest and select a cancer type from the list. The cohort will be stratified into the mutated and wild-type groups based on the queried genes. Then, the results of Kaplan-Meier curves (PFI and/or OS), boxplots (TMB level, Neoantigen expression, and PD-L1 expression), and forest plots of meta analysis for PFS/OS will be partially or fully generated depending on the available information (as shown in **Figure 1c** and **1e**). When one record in the result list (**Figure 1c**) is clicked, corresponding figures will be shown in **Figure 1e**. The generated results and figures can be downloaded by clicking the buttons shown in **Figure 1d**.
+In the **PredExplore** module allows users to explore the value of genes of interest as immunotherapy biomarkers across multiple cohorts. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **PredExplore** tab.
+- Step 2: Select one cancer type from the drop-down list (**Figure 1A**).
+- Step 3: Select one or more interested cohorts from the drop-down list (**Figure 1B**). By default, all cohorts were choosed.
+- Step 4: Select a predefined gene signature or pathway from the drop-down list, or input the gene symbol manually (**Figure 1C**).  If using the predefined gene list, the genes in the pathway will be automatically filled into the input box. The Users can generate a list of up to 50 genes of interest.
+- Step 5: If two or more genes were input, the relationship among them needs to be considered (**Figure 1D**). "AND" means that samples will be stratified into mutated group based on all queried gene mutations. "OR" means that samples with as least one of the input gene mutations will be stratified into a mutated group.
 
-<img alt="PredExplore" title="PredExplore" src="tour_icip.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+When all parameters are settled, click "**Submit**" to start the analysis. The cohort will be stratified into the mutated and wild-type groups based on the queried genes. Then, the results of Cox regression and log-rank test, as well as differences in clinical factors between the two groups will be presented in a table (**Figure 1E**). Click the result can call out its the Kaplan-Meier curves (PFS and/or OS), boxplots (TMB level, Neoantigen expression, Tumor purity, and PD-L1 expression), and forest plots of meta-analysis for PFS/OS (**Figure 1F**).  The results and figures can be downloaded by from "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 1. The interface of Immunotherapy Predictive Biomarkers Exploration</b>. <b>(a)</b> Textbox to fill in multiple interested genes or select from the list. <b>(b)</b> Dropdown list to specify the cancer types. <b>(c )</b> Table of analysis results. <b>(d)</b> Buttons for result downloading. <b>(e)</b> Figures corresponding to the selected item in the result list.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="PredExplore" title="PredExplore" src="tour_icip_left.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+<img alt="PredExplore" title="PredExplore" src="tour_icip_right.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 1. The interface of Immunotherapy Predictive Biomarkers Exploration funtion</b>. </figcaption>
 
 </figure>
 
@@ -54,134 +66,255 @@ PredExplore allows users to explore the value of interested genes as immunothera
 <a name="progexplore"> </a>
 ### ProgExplore: Cancer Prognostic Biomarkers Exploration
 
-By using ProgExplore, users can quickly investigate the prognostic value of interested genes across 40 cohorts of 19 cancer types. Before conducting the investigation, users need to specify a cancer type and fill in the gene symbols of interest in **Figure 2a** and **2b**. Then, the analysis will be launched by clicking the ‘Submit’ button. Detailed results will be shown as a table (**Figure 2c**), and corresponding figures (**Figure 2e**) will be shown by clicking the records in the result list. The generated results and figures can be downloaded by clicking the buttons shown in **Figure 2d**.
+In the **ProgExplore** module, users can investigate the prognostic value of genes of interest across 40 cohorts of 19 cancer types. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **ProgExplore** tab.
+- Step 2: Select a cancer type from the drop-down list (**Figure 2A**).
+- Step 3: Select a predefined gene signature or pathway from the drop-down list, or input the gene symbol manually (**Figure 2B**). If choosing a predefined gene list, the genes in the pathway will be automatically filled into the input box. Users can add more genes or delete the input gene symbols.The Users can generate a list of up to 10 genes of interest..
+- Step 4: If two or more genes are selected, the relationship among them needs to be considered (**Figure 2C**). "AND" means that samples will be stratified into mutated group based on all queried gene mutations. "OR" means that samples with as least one of the input gene mutations will be stratified into a mutated group.
 
-<img alt="ProgExplore" title="ProgExplore" src="tour_prog.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+When all parameters are settled, click "**Submit**" to start the analysis. The cohort will be stratified into the mutated and wild-type groups based on the queried genes. Then, the results of Cox regression and log-rank test, as well as differences in f clinical factors between the two groups will be presented in a table (**Figure 2D**). Click the result can call out its the Kaplan-Meier curves (PFS and/or OS) and boxplots (TMB level, Neoantigen expression, Tumor purity, and PD-L1 expression) (**Figure 2E**). The results and figures can be downloaded by from "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 2. The interface of Cancer Prognostic Biomarker Exploration</b>. <b>(a)</b> Textbox to fill in multiple interested genes or select from the list. <b>(b)</b> The drop-down list of specifying the cancer type. <b>(c )</b> Table of detailed analysis results. <b>(d)</b> Buttons for result downloading. <b>(e)</b> Figures corresponding to the selected record in the result list.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="ProgExplore" title="ProgExplore" src="tour_prog_up.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+<img alt="ProgExplore" title="ProgExplore" src="tour_prog_down.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 2. The interface of Cancer Prognostic Biomarker Exploration function</b>.</figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="kmcurve"> </a>
-### Survival analysis: Kaplan-Meier Curve
+### Survival Analysis: Kaplan-Meier Curve
 
-Kaplan-Meier curve is used to estimate the prognostic value of mutation status or expression alteration of interested genes. As shown in **Figure 3a**, users need to select the study type, cancer type and research cohort, fill in the genes of interest and choose the mutation type or select the cutoff values for expression data to launch the analysis by clicking the ‘Submit’ button. Users are also allowed to customize the colors in the figure. For the results, users can select the Kaplan-Meier curve of different genes by clicking the tab on top of **Figure 3b**. The ‘All Queried Genes’ tab shows the combined overall alteration results of the selected gene set (the combined result will mark the sample as mutated if more than one gene of the gene set is mutated). The ‘All Queried Genes’ tabs appeared in the following context or figures share the same meaning here. Detailed results for Kaplan-Meier curve plotting are listed in **Figure 3d**. Moreover, all the corresponding results and figures can be downloaded by clicking the buttons shown in **Figure 3c**.
+The Kaplan-Meier curve is used to estimate the prognostic value of mutation status or expression alteration of genes of interest. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **Survival Analysis** tab and select the **Kaplan-Meier curve** subtab.
+- Step 2: Select the study type, cancer type and research dataset (**Figure 3A**).
+- Step 3: Select the data type, fill in the genes of interest, choose the mutation type or select the cutoff values for gene expression. If the mutation has been selected in Step 2, and two or more genes are filled, the relationship among them needs to be considered (**Figure 3B**).
+- Step 4: Select the biopsy time and the immune checkpoint inhibitors (ICIs) type (**Figure 3C**).
+- Step 5: Select the line color and the position of the annotation text (**Figure 3D**).
 
-<img alt="Kaplan-Meier Curve" title="Kaplan-Meier Curve" src="tour_km.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+Detailed results for the Kaplan-Meier curve plotting are listed in **Figure 3E** and **3F**. Users can select the plots of different genes by clicking the tab on top of this panel. The "All Queried Genes" tab is to show the combined overall alteration results of the selected gene set. All the corresponding results and figures can be downloaded from the "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 3. The interface of survival analysis with Kaplan-Meier estimation</b>. <b>(a)</b> Control panel to select the cancer type, research cohort, and mutation types, and fill in multiple interested genes. <b>(b)</b> Kaplan-Meier curves of selected genes and the combined results. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed data for Kaplan-Meier curve plotting.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Kaplan-Meier Curve" title="Kaplan-Meier Curve" src="tour_km.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 3. The interface of survival analysis with Kaplan-Meier estimation</b>. </figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="cox"> </a>
-### Survival analysis: Cox regression
+### Survival Analysis: Cox regression
 
-Cox regression is used to evaluate the prognostic value of the gene alteractions/expression levels and clinical properties, including age, sex, stage, smoking, and TMB et al. To start the analysis, users need to input the genes of interest and select the study type, a cancer type, a research cohort, clinical properties, and mutation types (as shown in **Figure 4a**) or cutoff values. Univariable and multivariable Cox regression will be conducted using clinical properties with the mutation or expression information of selected genes. Forest plots and detailed results will be generated, as shown in **Figure 4b** and **4d**, respectively. All the results and figures can also be downloaded by clicking the download buttons in **Figure 4c**.
+Cox regression is used to evaluate the prognostic value of the genetic alterations/expression levels and clinical properties, including age, sex, stage, smoking, and TMB, et al. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **Survival Analysis** tab and select the **Cox regression** subtab.
+- Step 2: Select the study type, cancer type and research dataset (**Figure 4A**).
+- Step 3: Select the data type, fill in the genes of interest, choose the mutation type or select the cutoff values for gene expression. If the mutation has been selected in Step 2, and two or more genes are filled, the relationship among them needs to be considered (**Figure 4B**).
+- Step 4: Select the clinical characteristics (**Figure 4C**).
 
-<img alt="Cox regression" title="Cox regression" src="tour_cox.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+Univariable and multivariable Cox regressions will be conducted using clinical properties with the mutation or expression information of selected genes. Forest plots and detailed results will be generated, as shown in **Figure 4D** and **4E**, respectively. All the results and figures can also be downloaded by clicking from "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 4. The interface of survival analysis using cox regression</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, and mutation types, and fill in multiple interested genes. <b>(b)</b> Forest plot of cox regression using selected genes and clinical properties. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results of Cox regression.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Cox regression" title="Cox regression" src="tour_cox.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 4. The interface of survival analysis using Cox Regression</b>. </figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="subgroup"> </a>
-### Survival analysis: Subgroup Analyses
+### Survival Analysis: Subgroup Analysis
 
-Subgroup analysis aims to investigate the interaction effects of mutation status or expression of genes of interest with related clinical characteristics. As shown in **Figure 5a**, users need to input the genes of interest and select related options of the study type, a study cohort, interaction factor type, related clinical characteristics, and mutation types (input cutoff values for expression data). **Figures 5b** and **5d** show the results of Subgroup Analysis. Users can check the results of different genes by clicking the tabs of gene symbols. Detailed result table can be downloaded via the button in **Figure 5c**.
+Subgroup analysis aims to investigate the interaction effects of mutation status or expression of genes of interest with related clinical characteristics. The analysis can be preformed in following steps.
+
+- Step 1: Navigate to the **Survival Analysis** tab and select the **Subgroup Analysis** subtab.
+- Step 2: Select the study type, cancer type and research dataset (**Figure 5A**).
+- Step 3: Select the data type, fill in the genes of interest, choose the mutation type or select the cutoff values for gene expression. If two or more genes have been filled, the relationship among them needs to be considered (**Figure 5B**).
+- Step 4: Select the interaction factor type (**Figure 5C**)
+
+Users can check the forestplot of different genes by clicking the tabs of gene symbols as shown in **Figure 5D**. The corresponding data table to the forestplot are as shown in **Figure 5E**. Detailed result tables can be downloaded via the "**DLTable**".
 
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
 
-<img alt="Subgroup Analyses" title="Subgroup Analyses" src="tour_subgroup.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+<img alt="Subgroup Analysis" title="Subgroup Analysis" src="tour_subgroup.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
 
-<figcaption style="text-align:center;"><b>Figure 5. The interface for Subgroup analyses</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, the interaction factor type, clinical characteristics, and mutation types, and input multiple interested genes. <b>(b)</b> Forest plot and detailed analysis results. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+<figcaption style="text-align:center;"><b>Figure 5. The interface for Subgroup Analysis</b>.</figcaption>
+
+</figure>
+
+--------------------------------------------------------------------------------
+
+<a name="cutpoint"> </a>
+### Survival Analysis: Cutpoint Analysis
+
+Cutpoint analysis aims to determine the optimal cutpoint for one or multiple continuous variables at once, using the Maximally Selected Rank Statistics method. The analysis can be preformed in following steps.
+
+- Step 1: Navigate to the **Survival Analysis** tab and select the **Cutpoint Analysis** subtab.
+- Step 2: Select the study type, data type and research dataset (**Figure 6A**).
+- Step 3: Select the dataset and fill in the genes or clinical characteristics of interest (**Figure 6B**).
+- Step 4: Select the line color (**Figure 6C**).
+
+The line plot of HR and 95%CI of all proportions and detailed results will be generated, as shown in **Figure 6D** and **6E**, respectively. All the results and figures can also be downloaded from "**DLTable**" and "**DLGraph**", respectively.
+
+
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Cutpoint Analysis" title="Cutpoint Analysis" src="tour_cutpoint.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 6. The interface for Cutpoint Analysis function</b>.</figcaption>
+
+</figure>
+
+--------------------------------------------------------------------------------
+
+<a name="response"> </a>
+### Survival Analysis: Immunotherapy Response
+
+Immunotherapy response analysis is used to investigate differences in overall response rate (ORR) and clinical benefit between the genetic alterations/expression levels or clinical properties, including age, sex, stage, smoking, and TMB, et al. The analysis can be preformed in following steps.
+
+- Step 1: Navigate to the **Survival Analysis** tab and select the **Immunotherapy Response** subtab.
+- Step 2: Select the cancer type and research dataset (**Figure 7A**).
+- Step 3: Select the data type (Clinicopathologicals or Mutation) and the corresponding clinical factors or gene symbols and choosed the mutation type of genes(**Figure 7B**).
+- Step 4: Select the biopsy time and the immune checkpoint inhibitors (ICIs) type (**Figure 7C**).
+- Step 5: Select the grouped color of the box plot (**Figure 7D**).
+
+The stack plot, box plot and detailed results will be generated, as shown in **Figure 7E** and **7F**, respectively. All the results and figures can also be downloaded from "**DLTable**" and "**DLGraph**", respectively.
+
+
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Immunotherapy Response" title="Immunotherapy Response" src="tour_response.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 7. The interface for Immunotherapy Response function</b>.</figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="interaction"> </a>
-### Interaction Analyses
+### Interaction Analysis
 
-In the Interaction Analysis, we provide the function of testing for interaction effects of gene mutation status (or expression levels) with treatment. To start the analysis, users need to fill in the gene symbols of interest in the textbox and select the mutation types (input the cutoff values for expression data) in the control panel (**Figure 6a**). **Figures 6b** and **6d** show the analysis results of Kaplan-Meier curves and detailed result table, respectively. The value of P for Interaction is shown in Figure 6b. Users can also download the figures and results via the buttons in **Figure 6c**.
+Interaction Analysisis used to test interaction effects of gene mutation status (or expression levels) with treatment. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **Interaction Analysis** tab.
+- Step 2: Select the dataset and cancer type (**Figure 8A**).
+- Step 3: Select and fill in the genes of interest and choose the mutation type. twoor more genes have been filled, the relationship among them needs to be considered (**Figure 8B**).
+- Step 4: Select the line color of different groups. (**Figure 8C**).
 
-<img alt="Interaction Analyses" title="Interaction Analyses" src="tour_interaction.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+The Kaplan-Meier curves in two treatment groups and the detailed result tables are shown as in **Figure 8D** and **8E**, respectively. The value of P for interaction is shown in the Kaplan-Meier curves. Users can also download the figures and results via the "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 6. The interface for Interaction analysis</b>. <b>(a)</b> Control panel to fill in multiple interested genes and select mutation types and visualization colors. <b>(b)</b> Kaplan-Meier curves of the analysis results. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Interaction Analysis" title="Interaction Analysis" src="tour_interaction.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 8. The interface for Interaction Analysis function</b>.</figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="immunogenicity"> </a>
-### Immunogenicity Analyses
+### Immunogenicity Analysis
 
-In Immunogenicity analysis, we collected the continuous immune-related biomarkers and performed the comparative analysis of tumor purity, TMB, NeoAntigen, and PD-L1 expression based on the mutation status or expression levels of selected biomarkers. To start the analysis, users need to fill in the genes of interest and select the study type, a cancer type, a research cohort, data type, clinical properties, and mutation types (as shown in **Figure 7a**) or cutoff values for expression data. Then, the comparative analysis will be conducted using the mutation information of selected genes. Boxplots and detailed results will be generated as shown in Figures **7b** and **7d**, respectively. The results and figures can also be downloaded by clicking the download buttons in Figure **7c**.
+Immunogenicity analysis has included the continuous immune-related biomarkers and performed the comparative analysis of tumor purity, TMB, Neoantigen, and PD-L1 expression based on the mutation status or expression levels of selected biomarkers. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **Immunogenicity Analysis** tab.
+- Step 2: Select the study type, cancer type and dataset (**Figure 9A**).
+- Step 3: Select X-axis variables: the data type, the genes of interest and the mutation type or the cutoff values for gene expression. If the mutation has been selected in step 2, and two or more genes are filled, the relationship among them should be consider (**Figure 9B**).
+- Step 4: Select Y-axis variables, including Clinicopathologicals, mRNA expression and ssGSEA score of predefined pathways or gene signatures (**Figure 9C**).
+- Step 5: Select the color of the box plot or scatter plot of two groups (**Figure 9D**).
 
-<img alt="Immunogenicity Analyses" title="Immunogenicity Analyses" src="tour_genicity.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
 
-<figcaption style="text-align:center;"><b>Figure 7. The interface of immunogenicity analysis</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, and mutation types, and fill in multiple interested genes. <b>(b)</b> Boxplot of TMB, Neoantigen, and PDL1-exp difference of the mutated and wild-type groups. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+The box plots or scatter plots and detailed results tables will be generated as shown in **Figure 9E** and **9F**, respectively. The results tables and figures can also be downloaded from "**DLTable**" and "**DLGraph**", respectively.
+
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="Immunogenicity Analysis" title="Immunogenicity Analysis" src="tour_genicity.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 9. The interface of Immunogenicity Analysis function</b>. </figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="tme_corr"> </a>
-### Tumor microenvironment: TME Correlation Analyses
+### TME Analysis: TME Correlation Analysis
 
-In the TME Correlation Analysis, users can investigate the correlations of selected genes with selected immunomodulator or signature, including gene sets (Chemokine, Receptor, MHC, Immunoinhibitor, Immunostimulator et al.) and pathways (Immune-related signatures, Key signatures, Oncogenic Signalling et al.). To conduct the analysis, users need to select the study type, a cancer type, a research cohort, an immunomodulator type, a correlation algorithm, and the visualization type. Then, genes of interest are needed to fill in the textbox in **Figure 8a**. Colors of different groups can also be customized by changing the values of ‘Color 1’ and ‘Color 2’ in **Figure 8a**. Correlation analysis results can be found in **Figures 8b** and **8d**. The results and figures can be downloaded by clicking the buttons in **Figure 8c**.
+In the Tumor microenvironment (TME) Correlation Analysis, users can investigate the correlations of selected genes with selected immunomodulators or signatures, including gene sets (Chemokine, Receptor, MHC, Immunoinhibitor, Immunostimulator, et al.) and pathways (Immune-related signatures, Key signatures, Oncogenic Signalling, et al.). The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **TME Analysis** tab and select the **TME Correlation Analysis** subtab.
+- Step 2: Select the study type, cancer type and dataset (**Figure 10A**).
+- Step 3: Select and fill in the genes of interest (**Figure 10B**).
+- Step 4: Select the immune genes or sigantures (**Figure 10C**).
+- Step 5: Select the method used for correaltionship (**Figure 10D**).
+- Step 6: Select the figure type and graphic color (**Figure 10E**).
 
-<img alt="TME Correlation Analyses" title="TME Correlation Analyses" src="tour_corr.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+The heatmap of the correlation analysis can be found in **Figures 10F** and the detailed results can be found in **Figure 10G**. The results and figures can be downloaded from "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 8. The interface of TME Correlation analysis</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, correlation algorithm, visualization type, and fill in multiple interested genes. <b>(b)</b> Bubble plot or Heatmap of the correlation analysis result. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="TME Correlation Analysis" title="TME Correlation Analysis" src="tour_corr.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 10. The interface of TME Correlation Analysis function</b>. </figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="tme_comp"> </a>
-### Tumor microenvironment: TME Comparative Analyses
+### Tumor microenvironment: TME Comparative Analysis
 
-In the TME Comparative Analysis function, users can easily investigate the immunomodulator or signature differences in low- and high-expressed groups of selected genes. Users need to select the study type, a cancer type, a research cohort, and an immunomodulator/signature type. After that, genes of interest and cutoff values need to be given in corresponding textboxes (**Figure 9a**). Colors of different groups can also be customized by changing the values of ‘Color 1’ and ‘Color 2’ in **Figure 9a**. Heatmap and detailed results of Comparative analysis can be found in **Figures 9b** and **9d**. Users are allowed to download the results and figures by clicking the buttons in **Figure 9c**.
+In the TME Comparative Analysis module, users can investigate the immune-related gene or signature differences in low- and high-expressed groups of selected genes. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **TME Analysis** tab and select the **TME Comparative Analysis** subtab.
+- Step 2: Select the study type, cancer type and dataset (**Figure 11A**).
+- Step 3: Select and fill in the genes of interest and the cutoff values for gene expression (**Figure 11B**).
+- Step 4: Select the immune-related genes or pathways (**Figure 11C**). If the pathway has been selected, the ssGSEA score will be calculated.
+- Step 5: Select the graphic color of low and high-group or expression(**Figure 11D**).
 
-<img alt="TME Comparative Analyses" title="TME Comparative Analyses" src="tour_comp.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+The heatmap of the gene expression or ssGSEA score of pathways can be found in **Figures 11E** and the difference between low- and high-group can be found in **Figure 11F**. The results and figures can be downloaded from "**DLTable**" and "**DLGraph**", respectively.
 
-<figcaption style="text-align:center;"><b>Figure 9. The interface of the TME Comparative Analysis</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, immonomodulator/signature type, and fill in multiple interested genes and cutoff values. <b>(b)</b> Heatmap of the TME Comparative Analysis result. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="TME Comparative Analysis" title="TME Comparative Analysis" src="tour_comp.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 11. The interface of the TME Comparative Analysis function</b>. </figcaption>
 
 </figure>
 
 --------------------------------------------------------------------------------
 
 <a name="mutationprofile"> </a>
-### MutationProfiles
+### Mutation Profiles
 
-Tumor Mutation Profile function helps to visualize the mutation status of selected genes in groups stratified by the mutation status or expression levels of interested genes. To visualize the mutation status, users need to select the study type, a cancer type, and mutation types (**Figure 10a**) or cutoff values for expression data. Then, genes for stratification and genes for visualization are needed to fill in the corresponding textboxes separately (**Figure 10a**). Colors of different groups can also be customized by changing the values of ‘Color 1’ and ‘Color 2’ in **Figure 10a**. Results are shown in **Figures 10b** and **10d**. The results and figures can be downloaded by clicking the buttons in **Figure 10c**.
+The tumor Mutation Profile function helps visualize the mutation status of selected genes in groups stratified by the mutation status or expression levels of genes of interest. The analysis can be preformed in following steps.
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+- Step 1: Navigate to the **Mutation Profiles** tab.
+- Step 2: Select the study type, cancer type and dataset (**Figure 12A**).
+- Step 3: Select the data type and fill in the genes of interest and the mutation type or the cutoff values for gene expression. If the mutation has been selected in Step 2, and two or more genes are filled, the relationship among them needs to be considered (**Figure 12B**).
+- Step 4: Select and enter the displayed gene sysmbols (**Figure 12C**).
+- Step 5: Select the mutation type of genes (**Figure 12D**).
+- Step 6: Exclude known frequently mutated genes (FLAGs) (**Figure 12E**).
+- Step 7: Customized the colors of different groups (**Figure 12F**).
 
-<img alt="MutationProfiles" title="MutationProfiles" src="tour_mutation.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
 
-<figcaption style="text-align:center;"><b>Figure 10. The interface of Tumor mutation profile visualization</b>. <b>(a)</b> Control panel to select the study type, cancer type, research cohort, and mutation types, and fill in multiple interested genes. <b>(b)</b> Fall-plot of the mutation status of selected genes in different groups. <b>(c )</b> Buttons for result downloading. <b>(d)</b> Table of detailed results.</figcaption>
+Results are shown in **Figures 12G** and **12H**. The results and figures can be downloaded from "**DLTable**" and "**DLGraph**", respectively.
+
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
+
+<img alt="MutationProfiles" title="MutationProfiles" src="tour_mutation.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
+
+<figcaption style="text-align:center;"><b>Figure 12. The interface of Tumor Mutation Profiles visualization</b>.</figcaption>
 
 </figure>
 
@@ -190,14 +323,14 @@ Tumor Mutation Profile function helps to visualize the mutation status of select
 <a name="data"> </a>
 ### Data availability
 
-All the datasets used in IMPACT are listed as a table on the ‘Data’ page. Detailed information on each dataset can be found in the table as shown in **Figure 11**. We provide the download links for all the publicly available datasets. Further requests may be needed to download our in-house datasets..
+All the datasets used in IMPACT are listed as a table on the "Data" page. Detailed information on each dataset can be found in the table as shown in **Figure 13**. We provide the download links for all the publicly available datasets. Further requests will be needed to download our in-house datasets..
 
 
-<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;">
+<figure style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;">
 
-<img alt="Data availability" title="Data availability" src="tour_data.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:60%;max-width:900px">
+<img alt="Data availability" title="Data availability" src="tour_data.png" style="display:block;margin-left:auto;margin-right:auto;vertical-align:middle;width:100%;max-width:900px">
 
-<figcaption style="text-align:center;"><b>Figure 11. The screenshot of dataset information used in IMPACT</b>.</figcaption>
+<figcaption style="text-align:center;"><b>Figure 13. The screenshot of dataset information used in IMPACT</b>.</figcaption>
 
 </figure>
 

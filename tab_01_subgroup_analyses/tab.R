@@ -12,10 +12,11 @@
 source("./r/func.factorization.R")
 
 tab_01_subgroup_analyses <- list()
+cat_prefix_subgroup <- 'Subgroup'
 sidebar <- sidebarPanel(
   id = 'subgroup_sidebar',
   width = 3,
-  h3("Subgroup Analyses"),
+  h3("Subgroup Analysis"),
   awesomeRadio(inputId = "subgroup_study_type",
                label = "Select study types", 
                choices = c("Immunogenomics Studies", "Non-immunogenomics Studies"),
@@ -49,10 +50,48 @@ sidebar <- sidebarPanel(
                                   options = list(delimiter = " ", create = T,
                                                  maxItems = 10,placeholder = "No more than 10 genes.",
                                                  plugins = list('remove_button', 'drag_drop'))),
+                   
+                   conditionalPanel('input.subgroup_data_type == "Mutation"',
+                                    pickerInput(inputId = "subgroup_vartype_id",
+                                                label = tags$span(
+                                                  add_prompt(tags$span(icon(name = "circle-question")),
+                                                             message = "Variant Classification for Mutation data", 
+                                                             position = "right"),
+                                                  "Select gene mutation types"),
+                                                choices = NULL,
+                                                multiple = TRUE,
+                                                selected = NULL)),
+                   conditionalPanel("input.subgroup_data_type == 'Expr' || input.subgroup_data_type == 'Proteome'",
+                                    fluidRow(
+                                      column(6,numericInput(inputId = "subgroup_exprcut1_id",
+                                                            label = tags$span(
+                                                              add_prompt(tags$span(icon(name = "circle-question")),
+                                                                         message = "Percentile threshold for High/Low group", 
+                                                                         position = "right"),
+                                                              "Percentile cutoff (%,High):"),
+                                                            value = 50,
+                                                            min = 0,
+                                                            max = 100,step = NA,width = '100%')),
+                                      column(5,numericInput(inputId = "subgroup_exprcut2_id",
+                                                            label = "",
+                                                            value = 50,
+                                                            min = 0,
+                                                            max = 100,step = NA,width = '100%'))
+                                    )
+                   ),
+                   awesomeRadio(
+                     inputId = "subgroup_logical",
+                     label = "Mutations in all(AND)/any(OR) quried genes",
+                     inline = T,
+                     choices = c("AND" ,"OR"),
+                     selected = "AND",
+                     status = "success",
+                     checkbox = TRUE
+                   ),
                    # 选择基因还是临床信息
                    awesomeRadio(inputId = "subgroup_yaxis_factor",
                                 label = "Pls Select Interaction Factor Type:", 
-                                choices = c("Clinicopathologicals", "Gene Symbols"),
+                                choices = c("Clinicopathologicals", "mRNA"),
                                 selected = "Clinicopathologicals",
                                 # inline = TRUE,
                                 status = "success"),
@@ -60,18 +99,18 @@ sidebar <- sidebarPanel(
                                     # 用于亚组分析的临床属性
                                     pickerInput(inputId = "subgroup_factor_id",
                                                 label = tags$span(
-                                                  add_prompt(tags$span(icon(name = "question-circle")),
-                                                             message = "Select clinicopathologic characteristics used to Subgroup analyses!", 
+                                                  add_prompt(tags$span(icon(name = "circle-question")),
+                                                             message = "Select clinicopathologic characteristics used to Subgroup analysis!", 
                                                          position = "right"),
                                                   "Select one or multiple clinical characteristics"),
                                                 choices = NULL,
                                                 multiple = TRUE,
                                                 selected = NULL)),
-                   conditionalPanel('input.subgroup_yaxis_factor == "Gene Symbols"',
+                   conditionalPanel('input.subgroup_yaxis_factor == "mRNA"',
                                     # 用与亚组分析的基因
                                     # pickerInput(inputId = "subgroup_factor_gene_id",
                                     #             label = tags$span(
-                                    #               add_prompt(tags$span(icon(name = "question-circle")),
+                                    #               add_prompt(tags$span(icon(name = "circle-question")),
                                     #                          message = "Select genes used to Subgroup analyses!", 
                                     #                      position = "right"),
                                     #               "Pls Enter Interaction Genes:"),
@@ -81,8 +120,8 @@ sidebar <- sidebarPanel(
                                     #             selected = NULL),
                                     selectizeInput(inputId = "subgroup_factor_gene_id", 
                                                    label = tags$span(
-                                                     add_prompt(tags$span(icon(name = "question-circle")),
-                                                                message = "Select genes used to Subgroup analyses!", 
+                                                     add_prompt(tags$span(icon(name = "circle-question")),
+                                                                message = "Select genes used to Subgroup analysis!", 
                                                                 position = "right"),
                                                      "Select/Input query gene symbols"), 
                                                    choices = NULL, 
@@ -93,40 +132,23 @@ sidebar <- sidebarPanel(
                                                                   plugins = list('remove_button', 'drag_drop')))
                                     ),
   ),
-  conditionalPanel('input.subgroup_data_type == "Mutation"',
-                   pickerInput(inputId = "subgroup_vartype_id",
-                               label = tags$span(
-                                  add_prompt(tags$span(icon(name = "question-circle")),
-                                             message = "Variant Classification for Mutation data", 
-                                             position = "right"),
-                                 "Select gene mutation types"),
-                               choices = NULL,
-                               multiple = TRUE,
-                               selected = NULL)),
-  conditionalPanel("input.subgroup_data_type == 'Expr' || input.subgroup_data_type == 'Proteome'",
-                   fluidRow(
-                     column(6,numericInput(inputId = "subgroup_exprcut1_id",
-                                           label = tags$span(
-                                              add_prompt(tags$span(icon(name = "question-circle")),
-                                                         message = "Percentile threshold for High/Low group", 
-                                                         position = "right"),
-                                             "Percentile cutoff (%,High):"),
-                                           value = 50,
-                                           min = 0,
-                                           max = 100,step = NA,width = '100%')),
-                     column(5,numericInput(inputId = "subgroup_exprcut2_id",
-                                           label = "",
-                                           value = 50,
-                                           min = 0,
-                                           max = 100,step = NA,width = '100%'))
-                   )
-  ),
   # h5("Forest plot will be displayed when the number of mutant patients more than 5."),
-  h5(HTML(paste("<span style=color:red;font-size:10px;>", "Tips: Forest plot will be displayed when the mutant patients more than 5.", "</span>"))),
+  h5(HTML(paste("<span style=color:red;font-size:10px;>", "Note: Forest plot will be displayed when the mutant patients more than 5.", "</span>"))),
   # 提交按钮
-  actionButton(inputId = "subgroup_goButton",
-               label = "Submit",
-               class ="btn-primary"
+  # actionButton(inputId = "subgroup_goButton",
+  #              label = "Submit",
+  #              class ="btn-primary")
+  
+  fluidRow(
+    column(2, 
+           div(style="display:inline-block",actionButton(inputId = "subgroup_goButton",label = "Submit",class ="btn-primary"), style="float:left"),
+           
+    ),
+    column(7),
+    column(2, 
+           div(style="display:inline-block",actionButton("reset_input_subgroup", "Clear",class="btn-warning"), style="float:left"),
+           
+    )
   )
   
 )
@@ -140,10 +162,21 @@ mainpage <- mainPanel(
 tab_01_subgroup_analyses$ui <- sidebarLayout(sidebar, mainpage)
 
 tab_01_subgroup_analyses$server <- function(input, output,session) {
-  cat("=========================== Start Cox================================\n")
+  cat("========================= Start Subgroup=============================\n")
   
   # 定义变量存储输出对象
   output.graphic <- reactiveValues()
+  
+  # 定义变量存储输出对象
+  output.graphic <- reactiveValues()
+  
+  observeEvent(input[['reset_input_subgroup']], {
+    shinyjs::reset("subgroup_sidebar")
+  })
+  observeEvent(input$reset_input_subgroup, {
+    output[['subgroup_maintabs']] <- NULL
+  })
+  
   # 0.g根据队列类型（ICI或非ICI队列）从数据库获取肿瘤名称名称
   tumor.names.df <- eventReactive(c(input$subgroup_study_type),{
     study_type <- input$subgroup_study_type
@@ -187,10 +220,11 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
   })
   # 将获取到的内更新到页面
   observe({
+    subgroup_study_id_list <- unique(study.names.df()$study_id)
     updatePickerInput(session = session, 
                       inputId = "subgroup_study_id",
-                      choices = unique(study.names.df()$study_id), 
-                      selected = NULL)
+                      choices = subgroup_study_id_list, 
+                      selected = subgroup_study_id_list[1])
   })
   
   # 2. 获取数据类型
@@ -202,7 +236,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
                                    TRUE  ~ 'nonICIs')
     
     subgroup_in_cancer_id <- input$subgroup_cancer_detail 
-    subgroup_in_study_id <- input$subgroup_study_id
+    subgroup_in_study_id  <- input$subgroup_study_id
     cat("Subgroup-前端返回的队列名称: ",subgroup_in_study_id,"\n")
     
     # 本次过滤后应只有一条记录
@@ -311,14 +345,15 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
     
     temp.clinicals <- data.frame(clinical_properties = unlist(strsplit(temp.df$clinical_property,split = "#",fixed = F)))
     temp.clinicals <- temp.clinicals %>%
-      dplyr::filter(!clinical_properties %in% c('orr','response'))
+      dplyr::filter(!clinical_properties %in% c('orr','clinical_benefit'))
     return(temp.clinicals)
   })
   observe({
     # 更新clincal属性
-    clinical_properties <- unique(study.clinical.df()$clinical_properties)
+    clinical_properties <- toupper(unique(study.clinical.df()$clinical_properties))
     updatePickerInput(session = session, inputId = "subgroup_factor_id",
-                      choices = clinical_properties, selected = clinical_properties,
+                      choices = clinical_properties, 
+                      selected = clinical_properties,
                       options = list(
                         `actions-box` = TRUE))
   })
@@ -339,6 +374,11 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
   #                      value = 100-number2,
   #                      min = 0, max = 100, step = NA)
   # })  
+  
+  observe({
+    shinyjs::toggleState("subgroup_goButton", 
+                         !is.null(input$subgroup_symbol_id) && input$subgroup_symbol_id != "" )
+  })
   
 
   # 从DB获取数据
@@ -380,15 +420,27 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
                               return(temp.df)
                             })
 
+  # 输入为空验证
+  iv_subgroup <- InputValidator$new()
+  iv_subgroup$add_rule("subgroup_symbol_id", sv_required())
+  iv_subgroup$add_rule("subgroup_vartype_id", sv_required())
+  iv_subgroup$add_rule("subgroup_factor_id", sv_required()) 
+  iv_subgroup$add_rule("subgroup_factor_gene_id", sv_required())
+  iv_subgroup$add_rule("subgroup_exprcut1_id", sv_gt(9))
+  iv_subgroup$add_rule("subgroup_exprcut1_id", sv_lt(91))
+  iv_subgroup$add_rule("subgroup_exprcut2_id", sv_gt(9))
+  iv_subgroup$add_rule("subgroup_exprcut2_id", sv_lt(91))
+  iv_subgroup$enable()
+  
   # 业务层：分析
   observeEvent(input$subgroup_goButton,{
-    cat("========================= Server Subgroup==============================\n")
+    cat("========================= Server Subgroup==========================\n")
     show_modal_progress_line(
       color = "#00A064", # DF0101
-      trail_color = "#e95420",
+      trail_color = "#eee",
       duration = 90,
       easing = "easeOut",
-      text = "Starting Subgroup Analyses..."
+      text = "Starting subgroup analysis ..."
     )
     ## 数据处理及展示
     
@@ -422,7 +474,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
     vartype <- input$subgroup_vartype_id
     cat("选择的基因突变类型: ", vartype, "\n")
     
-    clinicalproperties <- input$subgroup_factor_id
+    clinicalproperties <- tolower(input$subgroup_factor_id)
     cat("选择的临床属性名称: ", clinicalproperties, "\n")
     
     clinicalproperties.genes <- input$subgroup_factor_gene_id
@@ -433,6 +485,9 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
     cat("选择的基因高表达分位数: ", exprcut1, "\n")
     cat("选择的基因低表达分位数: ", exprcut2, "\n")
     
+    subgroup_logical_type <- input$subgroup_logical
+    cat(cat_prefix_subgroup,"-选择的多基因突变逻辑关系: ", subgroup_logical_type, "\n")
+    
     # 数据清理、绘图、输出
     # cat("Clinical obj:",class(db.dat.cli()),"\n")
     # 提取参数
@@ -440,7 +495,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
     
     if(data_type == 'Mutation'){
       if(length(input.genes) >1){
-        input.genes <- c(input.genes,"All Queries Genes")
+        input.genes <- c(input.genes,"All Queried Genes")
       }
       
     }
@@ -474,7 +529,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
       lapply(seq(1,n), function(i) {
         gname <- input.genes[i]
         symbol.name <- gname
-        if(gname == 'All Queries Genes') {symbol.name <- input.genes} # EGFR#TP53#ALK
+        if(gname == 'All Queried Genes') {symbol.name <- setdiff(input.genes,gname)} # EGFR#TP53#ALK
         
         update_modal_progress(
           value = i / n,
@@ -489,21 +544,60 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
         if(data_type == 'Mutation'){
           # 临床样本与突变样本取交集
           tumor.samples <- intersect(unique(db.dat()$sample_id),db.dat.cli()$sample_id)
-          grp1.df <- db.dat() %>%
-            dplyr::filter(hugo_symbol %in% symbol.name,
-                          variant_classification %in% input.vartype) %>%
-            dplyr::select(sample_id,hugo_symbol)
+          
+          if(gname == 'All Queried Genes'){
+            
+            if(subgroup_logical_type == 'AND'){
+              # logical 为 AND 时
+              cat(cat_prefix_subgroup,"- 逻辑AND选择多基因突变模式！\n")
+              # browser()
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype) %>%
+                dplyr::select(sample_id,hugo_symbol) %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count == length(symbol.name)) # 取
+            }
+            if(subgroup_logical_type == 'OR'){
+              # logical 为 OR 时
+              cat(cat_prefix_subgroup,"- 逻辑OR选择多基因突变模式！\n")
+              tmp.mut.samples <- db.dat() %>%
+                dplyr::filter(hugo_symbol %in% symbol.name,
+                              variant_classification %in% input.vartype)  %>%
+                dplyr::distinct(sample_id,hugo_symbol,.keep_all = T) %>%
+                dplyr::group_by(sample_id) %>%
+                dplyr::summarise(sample_count = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::filter(sample_count >= 1) # 取
+            }
+            
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype) %>%
+              dplyr::filter(sample_id %in% tmp.mut.samples$sample_id) %>%
+              dplyr::select(sample_id,hugo_symbol)
+            
+          }else{
+            grp1.df <- db.dat() %>%
+              dplyr::filter(hugo_symbol %in% symbol.name,
+                            variant_classification %in% input.vartype) %>%
+              dplyr::select(sample_id,hugo_symbol)
+          }
+          
           # 选择临床信息进行亚组分析
           if(yaxis.type == "Clinicopathologicals"){
             clc.cli <- db.dat.cli() %>%
               dplyr::filter(sample_id %in% tumor.samples) %>%
-              dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','Wt'),levels = c('Wt','Mut'))) %>%
+              dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','WT'),levels = c('WT','Mut'))) %>%
               dplyr::select(sample_id,risk = Group,all_of(survival.colnames),all_of(input.clinpro))
             
             interaction.vars <- input.clinpro
           }
           # 选择基因基因亚组分析
-          if(yaxis.type == "Gene Symbols"){
+          if(yaxis.type == "mRNA"){
             clc.cli.gene <- do.call(cbind,lapply(input.clinpro.gene, function(ggsym){
               # ggsym <- input.clinpro.gene[1]
               # browser()
@@ -514,8 +608,8 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
               
               tmp.cli <- db.dat.cli() %>%
                 dplyr::filter(sample_id %in% tumor.samples) %>%
-                dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grpi.df$sample_id),'Mut','Wt'),
-                                             levels = c('Wt','Mut'))) %>%
+                dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grpi.df$sample_id),'Mut','WT'),
+                                             levels = c('WT','Mut'))) %>%
                 dplyr::rename(!!quo_name(ggsym) := Group) %>%
                 dplyr::select(ggsym) 
               return(tmp.cli)
@@ -523,7 +617,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
             # browser()
             clc.cli <- db.dat.cli() %>%
               dplyr::filter(sample_id %in% tumor.samples) %>%
-              dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','Wt'),levels = c('Wt','Mut'))) %>%
+              dplyr::mutate(Group = factor(ifelse(sample_id %in% unique(grp1.df$sample_id),'Mut','WT'),levels = c('WT','Mut'))) %>%
               dplyr::select(sample_id,risk = Group,all_of(survival.colnames)) %>%
               dplyr::bind_cols(clc.cli.gene)
             
@@ -573,7 +667,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
             interaction.vars <- input.clinpro
           }
           # 选择基因基因亚组分析
-          if(yaxis.type == "Gene Symbols"){
+          if(yaxis.type == "mRNA"){
             clc.cli.gene <- do.call(cbind,lapply(input.clinpro.gene, function(ggsym){
               # ggsym <- input.clinpro.gene[1]
               # symbol.name必须为单个基因的名称
@@ -633,19 +727,19 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
               style = "padding-top:15px",
               title = paste0(toupper(cli.name)), status = "primary", solidHeader = TRUE, collapsible = TRUE,
               shinycssloaders::withSpinner(uiOutput(paste0(gname, "_plot_subgroup_",tolower(cli.name)))),
-              h5(HTML(paste("<span style=color:black;font-size:12px;>", "All Queries Genes: mutation of at least one of query genes.", "</span>"))),
+              h5(HTML(paste("<span style=color:black;font-size:12px;>", "All Queried Genes: mutation of at least one of query genes.", "</span>"))),
               
               # downloadButton(paste0(gname, "_dl_plot_subgroup_",tolower(cli.name)), 
               #                tags$span(
               #                  "DLGraph",
-              #                  add_prompt(tags$span(icon(name = "question-circle")),
+              #                  add_prompt(tags$span(icon(name = "circle-question")),
               #                             message = "Save plot in a PDF file.", 
               #                             position = "left")),
               #                style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
               downloadButton(paste0(gname, "_dl_tbl_subgroup_",tolower(cli.name)),
                              tags$span(
                                "DLTable",
-                               add_prompt(tags$span(icon(name = "question-circle")),
+                               add_prompt(tags$span(icon(name = "circle-question")),
                                           message = "Save source data for Cox analysis in a txt file.",
                                           position = "left")),
                              style = "display:inline-block;float:right;color: #fff; background-color: #27ae60; border-color: #fff;padding: 5px 14px 5px 14px;margin: 5px 5px 5px 5px; "),
@@ -661,10 +755,8 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
           # browser()
           # cli.name <- 'OS'
           cat("==================== 亚组分析开始 ===================\n")
-          cat("亚组分析的属性:",c(interaction.vars),"\n")
-          
-          # ORR，Reponse等与治疗响应相关结果不纳入subgroup分析
-          # input.clinpro <- setdiff(input.clinpro,c('orr','response'))
+          # ORR，clinical_benefit等与治疗响应相关结果不纳入subgroup分析
+          # input.clinpro <- setdiff(input.clinpro,c('orr','clinical_benefit'))
           km.df <- clc.cli %>%
             dplyr::select(sample_id,
                           times = paste0(tolower(cli.name),"_months"),
@@ -676,13 +768,22 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
             as_tibble()
           # 因素因子化
           subgroup.df <- func.factorization(km.df,cancer_detail_in)
+          cat("因子化后数据:\n")
           print(as_tibble(subgroup.df)[1:10,])
           # browser()
           subgroup.df <- func.removeColsAllNa(subgroup.df)
           subgroup.df <- func.removeColsAllEmpty(subgroup.df)
           interaction.vars <- intersect(interaction.vars,colnames(subgroup.df))
+          # browser()
+          if(tolower(gname) %in% interaction.vars){
+            # 如果选择的基因已经在临床信息表中，需要从临床表中剔除该基因
+            interaction.vars <- setdiff(interaction.vars,tolower(gname)) 
+            subgroup.df <- subgroup.df %>%
+              dplyr::select(-tolower(gname))
+          }
+          cat("亚组分析的属性:",c(interaction.vars),"\n")
           # 亚组分析
-          {
+          if(F){
             # browser()
             sub.df <- subgroup.df %>%
               dplyr::mutate(risk = factor(risk,labels = c(0,1))) %>% # 0为WT或Low组
@@ -720,7 +821,7 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
             cat("亚组分析-绘图数据:\n")
             print(table.df)
             # browser()
-            pdf_prefix <- ifelse(gname == 'All Queries Genes',"AllQueriesGenes",gname)
+            pdf_prefix <- ifelse(gname == 'All Queried Genes',"AllQueriedGenes",gname)
             temp.pdfname <- paste0(pdf_prefix,"_",tolower(cli.name),"_",round(runif(1,1000000,10000000)),"_",Sys.Date(),"_forestplot_subgroup.pdf")
             # Plan A：对于突变数目小于5的队列，不展示森林图
             # Plan B：对于突变数目小于5的队列，展示一段默认提示
@@ -753,20 +854,72 @@ tab_01_subgroup_analyses$server <- function(input, output,session) {
             }
             
           }
-          
+          {
+            # 20220907 update
+            # Plan A：对于突变数目小于5的队列，不展示数据和森林图
+            # Plan B：对于突变数目小于5的队列，展示一段默认提示
+            if(nrow(subgroup.df[which(subgroup.df$risk %in% c('Mut','High')),]) < 5){
+              cat("Subgroup-分析，基因",gname,"的突变(高表达)样本小于5个，不执行亚组分析！\n")
+              show.forester <- FALSE
+            }else{
+              # browser()
+              # load("./example_files/example_input_gse135222.Rdata")
+              # sub.df <- subgroup.df %>%
+              #   dplyr::mutate(risk = factor(risk,labels = c(0,1))) %>% # 0为WT或Low组
+              #   as.data.frame()
+              # browser()
+              subgroup.out <- TableSubgroupMultiCox(Surv(times, status) ~ risk, 
+                                                    var_subgroup = interaction.vars, 
+                                                    # var_cov = subg.adjust.vars,
+                                                    data = subgroup.df,
+                                                    line = F,
+                                                    decimal.pvalue = 2,
+                                                    time_eventrate = 12*3 # 3Years, why?
+              )
+              rownames(subgroup.out) <- seq(1,nrow(subgroup.out))
+              table.df <- dplyr::bind_rows(subgroup.out[-1,],subgroup.out[1,]) %>%
+                dplyr::mutate(HR95CI = paste0(`Point Estimate`," (",Lower,"-",Upper,")")) %>%
+                dplyr::mutate(HR95CI = ifelse(grepl("NA",HR95CI),NA,HR95CI)) %>%
+                dplyr::mutate(`Point Estimate` = as.numeric(`Point Estimate`),
+                              Lower = as.numeric(Lower),
+                              Upper = as.numeric(Upper)) %>%
+                dplyr::mutate(Variable = ifelse(Variable %in% interaction.vars,toupper(Variable),Variable)) %>%
+                dplyr::select(Variable,Size = Count,HR = `Point Estimate`,Lower,Upper,`HR(95%CI)` = HR95CI,`P value`,`P for interaction`)
+              
+              pdf_prefix <- ifelse(gname == 'All Queried Genes',"AllQueriedGenes",gname)
+              temp.pdfname <- paste0(pdf_prefix,"_",tolower(cli.name),"_",round(runif(1,1000000,10000000)),"_",Sys.Date(),"_forestplot_subgroup.pdf")
+              # browser()
+              forester(left_side_data = table.df[,1:2],
+                       estimate = table.df$HR,
+                       ci_low = table.df$Lower,
+                       ci_high = table.df$Upper,
+                       right_side_data = table.df[,6:8],
+                       # estimate_col_name = 'HR(95%CI)',
+                       ggplot_width = 15,
+                       display = FALSE,
+                       xlim = c(-0.5, 2),
+                       null_line_at = 1,
+                       arrows = TRUE,
+                       render_as = 'pdf',
+                       arrow_labels = c(levels(subgroup.df$risk)[2],levels(subgroup.df$risk)[1]),
+                       file_path = here::here(paste0(temp_file_path,"/",temp.pdfname)))
+              use.demo <- FALSE
+              show.forester <- TRUE
+            }
+            
+          }
           output.graphic[[paste0(gname,"_tbl_subgroup_",tolower(cli.name))]]$subgroup_tbl <- subgroup.df
-          # output.graphic[[paste0(gname,"_plot_subgroup_",tolower(cli.name))]]$cox.plot <- NULL
-          
+          # browser()
           addResourcePath(prefix = "temp", directoryPath = temp_file_path)
-          resourcePaths()
+          # print(resourcePaths())
           output[[paste0(gname, "_plot_subgroup_",tolower(cli.name))]] <- renderUI({
             # if(use.demo){
             #   tags$iframe(style="height:485px; width:100%", 
             #               src = paste0("temp/demo.subgroup.replace.pdf"))
             # }
             if(!show.forester){
-              HTML(paste("<span style=color:red;font-size:18px;>", 
-                         "Forest plot was not displayed because of there is only ",
+              HTML(paste("<span style=color:red;font-size:16px;>", 
+                         "Subgroup analysis was not executed because of there is only ",
                          nrow(subgroup.df[which(subgroup.df$risk %in% c('Mut','High')),]),
                          " patients with ",
                          gname,

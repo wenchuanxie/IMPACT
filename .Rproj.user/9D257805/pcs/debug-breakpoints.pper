@@ -255,6 +255,51 @@
                 "type": 0,
                 "is_package_breakpoint": false,
                 "package_name": ""
+            },
+            {
+                "id": 53,
+                "path": "~/Documents/Rprojects/Pro3BNR/A02.proj/P20.OmicsMiner/IMPACT/tab_01_cutoff_analyses/tab.R",
+                "line_number": 407,
+                "function_steps": "",
+                "function_name": null,
+                "state": 0,
+                "editor_state": 0,
+                "editor_line_number": 407,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": true,
+                "type": 0,
+                "is_package_breakpoint": false,
+                "package_name": ""
+            },
+            {
+                "id": 58,
+                "path": "~/Documents/Rprojects/Pro3BNR/A02.proj/P20.OmicsMiner/IMPACT/tab_01_cutoff_analyses/tab.R",
+                "line_number": 425,
+                "function_steps": "",
+                "function_name": null,
+                "state": 0,
+                "editor_state": 0,
+                "editor_line_number": 425,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": true,
+                "type": 0,
+                "is_package_breakpoint": false,
+                "package_name": ""
+            },
+            {
+                "id": 60,
+                "path": "~/Documents/Rprojects/Pro3BNR/A02.proj/P20.OmicsMiner/IMPACT/tab_01_cutoff_analyses/tab.R",
+                "line_number": 424,
+                "function_steps": "",
+                "function_name": null,
+                "state": 0,
+                "editor_state": 0,
+                "editor_line_number": 424,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": true,
+                "type": 0,
+                "is_package_breakpoint": false,
+                "package_name": ""
             }
         ]
     }
