@@ -14,8 +14,6 @@ ui <- fluidPage(
   
   
   # cookie control
-  # ref：https://github.com/DataScienceScotland/shiny_cookies
-  # HTML('<script src="https://cc.cdn.civiccomputing.com/9/cookieControl-9.x.min.js" type="text/javascript"></script>'),
   tags$script(src = "cookieControl-9.x.min.js"),
   HTML("<script async src='https://www.googletagmanager.com/gtag/js?id=G-S07KP4MCSN'></script>"),
   tags$script(src = "cookie_control_config.js",style = 'fill:#00a064'),
